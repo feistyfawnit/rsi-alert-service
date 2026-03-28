@@ -12,8 +12,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Slf4j
@@ -24,6 +27,9 @@ public class MarketDataPollingService {
     private final MarketDataService marketDataService;
     private final PriceHistoryService priceHistoryService;
     private final SignalDetectionService signalDetectionService;
+    
+    // Track last candle timestamp per instrument+timeframe to avoid duplicate updates
+    private final Map<String, Instant> lastCandleTimestamps = new ConcurrentHashMap<>();
     
     @Value("${rsi.polling.interval-seconds:30}")
     private int pollingIntervalSeconds;
@@ -54,15 +60,29 @@ public class MarketDataPollingService {
         
         for (String timeframe : timeframes) {
             String trimmedTimeframe = timeframe.trim();
+            String timestampKey = instrument.getSymbol() + ":" + trimmedTimeframe;
             
             marketDataService.fetchCandles(instrument, trimmedTimeframe, 1)
                     .subscribe(
                             candles -> {
                                 if (!candles.isEmpty()) {
                                     Candle latestCandle = candles.get(0);
-                                    String key = priceHistoryService.buildKey(instrument.getSymbol(), trimmedTimeframe);
-                                    priceHistoryService.updatePriceHistory(key, latestCandle);
-                                    log.debug("Updated {} {} price: {}", instrument.getSymbol(), trimmedTimeframe, latestCandle.getClose());
+                                    Instant candleTimestamp = latestCandle.getTimestamp();
+                                    
+                                    // Only update if this is a new candle we haven't seen
+                                    Instant lastTimestamp = lastCandleTimestamps.get(timestampKey);
+                                    if (lastTimestamp == null || candleTimestamp.isAfter(lastTimestamp)) {
+                                        String key = priceHistoryService.buildKey(instrument.getSymbol(), trimmedTimeframe);
+                                        priceHistoryService.updatePriceHistory(key, latestCandle);
+                                        lastCandleTimestamps.put(timestampKey, candleTimestamp);
+                                        log.info("Updated {} {} with new candle at {}: {}", 
+                                                instrument.getSymbol(), trimmedTimeframe, 
+                                                candleTimestamp, latestCandle.getClose());
+                                    } else {
+                                        log.info("Skipping duplicate candle for {} {} at {} (last was {})", 
+                                                instrument.getSymbol(), trimmedTimeframe, 
+                                                candleTimestamp, lastTimestamp);
+                                    }
                                 }
                             },
                             error -> log.error("Error fetching candles for {} {}: {}", 

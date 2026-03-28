@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class SignalCooldownService {
     
-    private static final int COOLDOWN_MINUTES = 15;
+    private static final int COOLDOWN_MINUTES = 60;
     
     private final Map<String, LocalDateTime> lastAlertTimes = new ConcurrentHashMap<>();
     

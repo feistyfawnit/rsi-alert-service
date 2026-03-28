@@ -4,6 +4,8 @@ A Spring Boot service that monitors financial instruments for RSI alignment sign
 
 **Private Use Only - Ivan Terry & Brian Boyle**
 
+**Repository:** `https://github.com/feistyfawnit/rsi-alert-service` (Private)
+
 ## Features
 
 - ✅ Real-time RSI calculation across multiple timeframes (1m, 5m, 1h, 4h)
@@ -29,17 +31,14 @@ A Spring Boot service that monitors financial instruments for RSI alignment sign
 ### 1. Prerequisites
 
 - Docker & Docker Compose installed
-- (Optional) Finnhub API key for index/commodity data - get free key at https://finnhub.io
+- (Optional) Finnhub API key for index/commodity data - **already configured for DAX**
 
 ### 2. Configuration
 
 ```bash
-# Copy environment template
-cp .env.example .env
-
-# Edit .env and add your API keys (optional for Phase 1)
-# FINNHUB_API_KEY=your_key_here
-# NTFY_TOPIC=your-custom-topic (or use default: rsi-alerts)
+# Environment already configured:
+# FINNHUB_API_KEY=your_api_key_here  (already set in environment)
+# NTFY_TOPIC=rsi-alerts  ✓ Default
 ```
 
 ### 3. Run with Docker Compose
@@ -119,6 +118,7 @@ The app comes pre-configured with:
 - **Solana (SOLUSDT)** - Binance
 - **Bitcoin (BTCUSDT)** - Binance  
 - **Ethereum (ETHUSDT)** - Binance
+- **DAX (^GDAXI)** - Finnhub (via configured API key)
 
 All crypto data is FREE via Binance API (no API key required).
 

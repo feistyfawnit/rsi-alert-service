@@ -12,6 +12,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
 import java.util.*;
 
 @Service
@@ -43,17 +45,24 @@ public class SignalDetectionService {
         
         for (String timeframe : timeframes) {
             String key = priceHistoryService.buildKey(instrument.getSymbol(), timeframe.trim());
+            log.debug("Analyzing {} with key: {}", instrument.getSymbol(), key);
             
             if (!priceHistoryService.hasMinimumHistory(key, MINIMUM_HISTORY)) {
+                log.info("Insufficient history for {} {}, warming up...", instrument.getSymbol(), timeframe);
                 warmupHistory(instrument, timeframe.trim());
             }
             
             LinkedList<BigDecimal> history = priceHistoryService.getPriceHistory(key);
             
             if (history.isEmpty()) {
-                log.debug("No history available for {} {}", instrument.getSymbol(), timeframe);
+                log.warn("No history available for {} {} (key: {})", instrument.getSymbol(), timeframe, key);
                 continue;
             }
+            
+            // DEBUG: Log price history summary
+            log.info("{} {} history: size={}, first={}, last={}", 
+                    instrument.getSymbol(), timeframe.trim(), 
+                    history.size(), history.getFirst(), history.getLast());
             
             if (currentPrice == null) {
                 currentPrice = history.getLast();
@@ -64,6 +73,8 @@ public class SignalDetectionService {
             if (rsi != null) {
                 rsiValues.put(timeframe.trim(), rsi);
                 log.debug("{} {} RSI: {}", instrument.getSymbol(), timeframe, rsi);
+            } else {
+                log.warn("RSI calculation returned null for {} {}", instrument.getSymbol(), timeframe);
             }
         }
         
@@ -93,7 +104,7 @@ public class SignalDetectionService {
             }
         }
         
-        BigDecimal avgRsi = sumRsi.divide(BigDecimal.valueOf(rsiValues.size()), 4, BigDecimal.ROUND_HALF_UP);
+        BigDecimal avgRsi = sumRsi.divide(BigDecimal.valueOf(rsiValues.size()), 4, RoundingMode.HALF_UP);
         
         SignalLog.SignalType signalType = null;
         int alignedCount = 0;
@@ -121,39 +132,58 @@ public class SignalDetectionService {
                     .rsiValues(rsiValues)
                     .timeframesAligned(alignedCount)
                     .totalTimeframes(totalTimeframes)
-                    .signalStrength(calculateSignalStrength(rsiValues, signalType))
+                    .signalStrength(calculateSignalStrength(rsiValues, signalType, instrument))
                     .build();
             
-            log.info("Signal detected: {} {} - {} timeframes aligned", 
-                    instrument.getName(), signalType, alignedCount);
+            log.info("Signal detected: {} {} - {} timeframes aligned, RSI values: {}", 
+                    instrument.getName(), signalType, alignedCount, rsiValues);
             
             eventPublisher.publishEvent(new SignalEvent(this, signal));
             cooldownService.recordAlert(instrument.getSymbol(), signalType);
         }
     }
     
-    private BigDecimal calculateSignalStrength(Map<String, BigDecimal> rsiValues, SignalLog.SignalType signalType) {
+    private BigDecimal calculateSignalStrength(Map<String, BigDecimal> rsiValues, SignalLog.SignalType signalType, Instrument instrument) {
         BigDecimal totalDeviation = BigDecimal.ZERO;
         
         for (BigDecimal rsi : rsiValues.values()) {
             if (signalType == SignalLog.SignalType.OVERSOLD || signalType == SignalLog.SignalType.PARTIAL_OVERSOLD) {
-                totalDeviation = totalDeviation.add(BigDecimal.valueOf(30).subtract(rsi).abs());
+                totalDeviation = totalDeviation.add(BigDecimal.valueOf(instrument.getOversoldThreshold()).subtract(rsi).abs());
             } else {
-                totalDeviation = totalDeviation.add(rsi.subtract(BigDecimal.valueOf(70)).abs());
+                totalDeviation = totalDeviation.add(rsi.subtract(BigDecimal.valueOf(instrument.getOverboughtThreshold())).abs());
             }
         }
         
-        return totalDeviation.divide(BigDecimal.valueOf(rsiValues.size()), 4, BigDecimal.ROUND_HALF_UP);
+        return totalDeviation.divide(BigDecimal.valueOf(rsiValues.size()), 4, RoundingMode.HALF_UP);
     }
     
     private void warmupHistory(Instrument instrument, String timeframe) {
         try {
-            marketDataService.fetchCandles(instrument, timeframe, MINIMUM_HISTORY)
-                    .subscribe(candles -> {
-                        String key = priceHistoryService.buildKey(instrument.getSymbol(), timeframe);
-                        candles.forEach(candle -> priceHistoryService.updatePriceHistory(key, candle));
-                        log.info("Warmed up {} candles for {} {}", candles.size(), instrument.getSymbol(), timeframe);
-                    });
+            // WARNING: Blocking call - should only be called from non-reactive threads
+            // (e.g., @Scheduled methods). Calling from reactive pipelines will cause errors.
+            List<Candle> candles = marketDataService.fetchCandles(instrument, timeframe, MINIMUM_HISTORY)
+                    .block(Duration.ofSeconds(10));
+            
+            if (candles != null && !candles.isEmpty()) {
+                String key = priceHistoryService.buildKey(instrument.getSymbol(), timeframe);
+                
+                // Calculate min/max in single pass
+                BigDecimal firstPrice = candles.get(0).getClose();
+                BigDecimal lastPrice = candles.get(candles.size() - 1).getClose();
+                BigDecimal minPrice = firstPrice;
+                BigDecimal maxPrice = firstPrice;
+                for (Candle candle : candles) {
+                    BigDecimal close = candle.getClose();
+                    if (close.compareTo(minPrice) < 0) minPrice = close;
+                    if (close.compareTo(maxPrice) > 0) maxPrice = close;
+                }
+                
+                log.info("Warmup {} {}: {} candles, first={}, last={}, min={}, max={}, range={}",
+                        instrument.getSymbol(), timeframe, candles.size(),
+                        firstPrice, lastPrice, minPrice, maxPrice, maxPrice.subtract(minPrice));
+                
+                candles.forEach(candle -> priceHistoryService.updatePriceHistory(key, candle));
+            }
         } catch (Exception e) {
             log.error("Error warming up history for {} {}: {}", instrument.getSymbol(), timeframe, e.getMessage());
         }

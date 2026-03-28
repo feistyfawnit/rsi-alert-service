@@ -38,6 +38,7 @@ rsi:
     - 5m
     - 1h
     - 4h
+    - 1d
 
 market:
   binance:
@@ -79,7 +80,7 @@ watchlist:
       type: CRYPTO
       oversold-threshold: 30
       overbought-threshold: 70
-      timeframes: "1m,5m,1h,4h"
+      timeframes: "1m,5m,1h,4h,1d"
     - symbol: BTCUSDT
       name: Bitcoin
       source: BINANCE
@@ -87,7 +88,7 @@ watchlist:
       type: CRYPTO
       oversold-threshold: 30
       overbought-threshold: 70
-      timeframes: "1m,5m,1h,4h"
+      timeframes: "1m,5m,1h,4h,1d"
     - symbol: ETHUSDT
       name: Ethereum
       source: BINANCE
@@ -95,4 +96,4 @@ watchlist:
       type: CRYPTO
       oversold-threshold: 30
       overbought-threshold: 70
-      timeframes: "1m,5m,1h,4h"
+      timeframes: "1m,5m,1h,4h,1d"

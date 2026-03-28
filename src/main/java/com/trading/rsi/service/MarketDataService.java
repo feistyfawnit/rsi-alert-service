@@ -126,6 +126,7 @@ public class MarketDataService {
             case "1h" -> "1h";
             case "4h" -> "4h";
             case "1d" -> "1d";
+            case "2d" -> "2d";
             default -> "1m";
         };
     }
