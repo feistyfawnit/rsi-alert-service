@@ -21,6 +21,7 @@ import java.util.Map;
 public class NotificationService {
     
     private final WebClient.Builder webClientBuilder;
+    private final ClaudeEnrichmentService claudeEnrichmentService;
     
     @Value("${notifications.ntfy.enabled:true}")
     private boolean ntfyEnabled;
@@ -56,12 +57,13 @@ public class NotificationService {
             return;
         }
         
-        sendNtfyNotification(event.getSignal());
+        String aiContext = claudeEnrichmentService.enrichSignal(event.getSignal());
+        sendNtfyNotification(event.getSignal(), aiContext);
     }
     
-    private void sendNtfyNotification(RsiSignal signal) {
+    private void sendNtfyNotification(RsiSignal signal, String aiContext) {
         String title = buildNotificationTitle(signal);
-        String message = buildNotificationMessage(signal);
+        String message = buildNotificationMessage(signal, aiContext);
         
         WebClient client = webClientBuilder.baseUrl(ntfyServerUrl).build();
         
@@ -97,7 +99,7 @@ public class NotificationService {
         return emoji + " " + signal.getInstrumentName() + " " + signalName;
     }
     
-    private String buildNotificationMessage(RsiSignal signal) {
+    private String buildNotificationMessage(RsiSignal signal, String aiContext) {
         StringBuilder message = new StringBuilder();
         
         message.append("Price: $").append(signal.getCurrentPrice()).append("\n");
@@ -121,6 +123,10 @@ public class NotificationService {
             case PARTIAL_OVERSOLD -> "Watch for full alignment - potential LONG setup";
             case PARTIAL_OVERBOUGHT -> "Watch for full alignment - potential SHORT/EXIT";
         });
+
+        if (aiContext != null && !aiContext.isBlank()) {
+            message.append("\n\n📰 AI Context:\n").append(aiContext);
+        }
         
         return message.toString();
     }

@@ -66,7 +66,8 @@ public class Instrument {
     public enum DataSource {
         BINANCE,
         FINNHUB,
-        IG
+        IG,
+        TWELVE_DATA
     }
     
     public enum InstrumentType {

@@ -24,8 +24,10 @@ public class DataInitializer implements ApplicationRunner {
         }
 
         int seeded = 0;
+        int updated = 0;
         for (WatchlistProperties.InstrumentConfig config : watchlistProperties.getInstruments()) {
-            if (!instrumentRepository.existsBySymbol(config.getSymbol())) {
+            var existing = instrumentRepository.findBySymbol(config.getSymbol());
+            if (existing.isEmpty()) {
                 Instrument instrument = Instrument.builder()
                         .symbol(config.getSymbol())
                         .name(config.getName())
@@ -40,12 +42,20 @@ public class DataInitializer implements ApplicationRunner {
                 log.info("Seeded instrument: {} ({})", config.getName(), config.getSymbol());
                 seeded++;
             } else {
-                log.debug("Instrument already exists, skipping: {}", config.getSymbol());
+                Instrument instrument = existing.get();
+                instrument.setEnabled(config.getEnabled());
+                instrument.setSource(config.getSource());
+                instrument.setOversoldThreshold(config.getOversoldThreshold());
+                instrument.setOverboughtThreshold(config.getOverboughtThreshold());
+                instrument.setTimeframes(config.getTimeframes());
+                instrumentRepository.save(instrument);
+                log.debug("Synced instrument from YAML: {} (enabled={})", config.getSymbol(), config.getEnabled());
+                updated++;
             }
         }
 
-        if (seeded > 0) {
-            log.info("Data initializer complete: {} new instruments seeded", seeded);
+        if (seeded > 0 || updated > 0) {
+            log.info("Data initializer complete: {} seeded, {} synced from YAML", seeded, updated);
         }
 
         log.info("Monitoring {} enabled instruments", instrumentRepository.findByEnabledTrue().size());

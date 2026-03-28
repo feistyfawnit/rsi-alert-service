@@ -35,3 +35,7 @@ build/
 ### Environment ###
 .env
 *.log
+
+### Planning / Notes (keep outside repo) ###
+PHASE2_ROADMAP.md
+QUICKSTART.md

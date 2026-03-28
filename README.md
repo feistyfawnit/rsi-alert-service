@@ -2,7 +2,7 @@
 
 A Spring Boot service that monitors financial instruments for RSI alignment signals across multiple timeframes and sends instant notifications.
 
-**Private Use Only - Ivan Terry & Brian Boyle**
+**Private Use Only - Ivan Ty & Brian K**
 
 **Repository:** `https://github.com/feistyfawnit/rsi-alert-service` (Private)
 
@@ -31,13 +31,13 @@ A Spring Boot service that monitors financial instruments for RSI alignment sign
 ### 1. Prerequisites
 
 - Docker & Docker Compose installed
-- (Optional) Finnhub API key for index/commodity data - **already configured for DAX**
+- (Optional) Paid Finnhub plan for index/commodity data (free tier doesn't include indices)
 
 ### 2. Configuration
 
 ```bash
 # Environment already configured:
-# FINNHUB_API_KEY=your_api_key_here  (already set in environment)
+# FINNHUB_API_KEY=your_api_key_here  (free tier - indices/stocks require paid plan)
 # NTFY_TOPIC=rsi-alerts  ✓ Default
 ```
 
@@ -115,12 +115,13 @@ GET /api/signals/recent?hours=24
 ## Default Instruments (Phase 1)
 
 The app comes pre-configured with:
-- **Solana (SOLUSDT)** - Binance
+- **Solana (SOLUSDT)** - Binance  
 - **Bitcoin (BTCUSDT)** - Binance  
 - **Ethereum (ETHUSDT)** - Binance
-- **DAX (^GDAXI)** - Finnhub (via configured API key)
 
 All crypto data is FREE via Binance API (no API key required).
+
+**Note:** DAX and other indices require a paid Finnhub plan (free tier doesn't include index data).
 
 ## Adding More Instruments
 
@@ -139,7 +140,9 @@ curl -X POST http://localhost:8080/api/instruments \
   }'
 ```
 
-### For Indices/Stocks (Requires Finnhub API Key)
+### For Indices/Stocks (Requires Paid Finnhub Plan)
+
+**Note:** Finnhub free tier (60 calls/min) does NOT include index/stock data. You need a paid plan.
 
 ```bash
 curl -X POST http://localhost:8080/api/instruments \
@@ -209,7 +212,7 @@ rsi:
 | Service | Cost | Notes |
 |---------|------|-------|
 | **Binance API** | FREE | All crypto data, no key required |
-| **Finnhub API** | FREE | 60 calls/min free tier (optional) |
+| **Finnhub API** | FREE | 60 calls/min free tier. Indices/stocks require **paid plan** |
 | **ntfy.sh** | FREE | Unlimited push notifications |
 | **Railway Hosting** | $0-5/month | Free tier: 500 hrs/mo, Hobby: $5 unlimited |
 | **PostgreSQL** | Included | Comes with Railway plan |

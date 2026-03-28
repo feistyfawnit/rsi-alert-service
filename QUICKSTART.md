@@ -53,27 +53,24 @@ curl http://localhost:8080/api/signals/recent?hours=24
 docker-compose logs -f app
 ```
 
-## Budget Confirmation
+## Budget & Deployment
 
-**Current setup: $0/month** ✅
+**Free local setup:** $0/month
 - Binance API: FREE
-- ntfy.sh: FREE  
+- ntfy.sh: FREE
 - Local Docker: FREE
 
-**To deploy 24/7 on Railway: $0-5/month**
-- Railway free tier: 500 hours/month (enough for testing)
-- Railway Hobby plan: $5/month unlimited (if you need 24/7)
+**Cloud deployment (Railway):** $5/month for 24/7 always-on monitoring
 
-## Optional: Add Finnhub for Indices/Stocks
+## Optional: Add More Data Sources
 
-If you want DAX, FTSE, Gold, Oil (not just crypto):
+**For indices (DAX, FTSE) and commodities (Gold, Oil):**
 
-1. Get free API key: https://finnhub.io/register
-2. Edit `.env`: `FINNHUB_API_KEY=your_key_here`
-3. Restart: `docker-compose restart app`
-4. Add instruments via API (see README.md)
-
-**Finnhub free tier: 60 calls/min - plenty for Phase 1**
+1. Open IG demo account at https://www.ig.com
+2. Generate API key at https://www.ig.com/myig/settings/api-keys
+3. Update `.env` with IG credentials (see `.env.example`)
+4. Enable instruments in `application.yml`
+5. Restart: `docker-compose restart app`
 
 ## Troubleshooting
 
@@ -105,16 +102,4 @@ docker-compose up -d
 1. **Customize thresholds** - Edit instrument settings via API
 2. **Add more instruments** - See README.md API examples
 3. **Deploy to Railway** - For 24/7 monitoring
-4. **Phase 2 features** - IG API integration, performance tracking
-
----
-
-**Your budget constraint ($5/month) is covered.** The free tier setup costs $0, and Railway Hobby plan is exactly $5/month if you need always-on deployment.
-
-Given your situation (potential redundancy, mortgage, kids), I recommend:
-- Start with **free local Docker** for testing (1-2 weeks)
-- Validate strategy actually works for you
-- Only deploy to Railway ($5/month) once proven valuable
-- **Do not** rush to Phase 4 auto-trading until 3+ months of manual validation
-
-Stay safe with capital, test thoroughly before risking real money.
+4. **Advanced features** - Claude AI enrichment, IG API for indices, trading integration (see README.md)

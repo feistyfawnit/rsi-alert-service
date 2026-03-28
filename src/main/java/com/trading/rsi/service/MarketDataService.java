@@ -23,22 +23,27 @@ public class MarketDataService {
     private final WebClient binanceClient;
     private final WebClient finnhubClient;
     private final String finnhubApiKey;
+    private final IGMarketDataClient igMarketDataClient;
     
     public MarketDataService(
             @Value("${market.binance.base-url}") String binanceUrl,
             @Value("${market.finnhub.base-url}") String finnhubUrl,
-            @Value("${market.finnhub.api-key}") String finnhubApiKey,
+            @Value("${market.finnhub.api-key:}") String finnhubApiKey,
+            IGMarketDataClient igMarketDataClient,
             WebClient.Builder webClientBuilder) {
         this.binanceClient = webClientBuilder.baseUrl(binanceUrl).build();
         this.finnhubClient = webClientBuilder.baseUrl(finnhubUrl).build();
         this.finnhubApiKey = finnhubApiKey;
+        this.igMarketDataClient = igMarketDataClient;
     }
     
     public Mono<List<Candle>> fetchCandles(Instrument instrument, String timeframe, int limit) {
         return switch (instrument.getSource()) {
             case BINANCE -> fetchBinanceCandles(instrument.getSymbol(), timeframe, limit);
             case FINNHUB -> fetchFinnhubCandles(instrument.getSymbol(), timeframe, limit);
-            case IG -> Mono.error(new UnsupportedOperationException("IG integration not yet implemented"));
+            case IG -> igMarketDataClient.fetchCandles(instrument.getSymbol(), timeframe, limit);
+            case TWELVE_DATA -> Mono.error(new UnsupportedOperationException(
+                    "Twelve Data free tier rate limits (8/min) are too low for real-time polling — use IG API instead"));
         };
     }
     

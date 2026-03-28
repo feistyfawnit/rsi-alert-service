@@ -30,12 +30,6 @@ public class SignalDetectionService {
     @Value("${rsi.period:14}")
     private int rsiPeriod;
     
-    @Value("${rsi.oversold-threshold:30}")
-    private int oversoldThreshold;
-    
-    @Value("${rsi.overbought-threshold:70}")
-    private int overboughtThreshold;
-    
     private static final int MINIMUM_HISTORY = 28;
     
     public void analyzeInstrument(Instrument instrument) {
@@ -59,10 +53,8 @@ public class SignalDetectionService {
                 continue;
             }
             
-            // DEBUG: Log price history summary
-            log.info("{} {} history: size={}, first={}, last={}", 
-                    instrument.getSymbol(), timeframe.trim(), 
-                    history.size(), history.getFirst(), history.getLast());
+            log.debug("{} {} history size={} last={}",
+                    instrument.getSymbol(), timeframe.trim(), history.size(), history.getLast());
             
             if (currentPrice == null) {
                 currentPrice = history.getLast();
