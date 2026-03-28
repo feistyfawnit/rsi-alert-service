@@ -1,0 +1,98 @@
+spring:
+  application:
+    name: rsi-alert-service
+  
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/rsi_alerts}
+    username: ${DATABASE_USER:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+server:
+  port: ${PORT:8080}
+
+rsi:
+  period: 14
+  oversold-threshold: 30
+  overbought-threshold: 70
+  
+  polling:
+    interval-seconds: 30
+    
+  quiet-hours:
+    enabled: true
+    start-hour: 2
+    end-hour: 6
+    
+  timeframes:
+    - 1m
+    - 5m
+    - 1h
+    - 4h
+
+market:
+  binance:
+    base-url: https://api.binance.com
+    
+  finnhub:
+    api-key: ${FINNHUB_API_KEY:}
+    base-url: https://finnhub.io/api/v1
+
+notifications:
+  ntfy:
+    enabled: true
+    topic: ${NTFY_TOPIC:rsi-alerts}
+    server-url: https://ntfy.sh
+    priority: high
+    
+  email:
+    enabled: false
+    smtp:
+      host: ${SMTP_HOST:smtp.gmail.com}
+      port: ${SMTP_PORT:587}
+      username: ${SMTP_USERNAME:}
+      password: ${SMTP_PASSWORD:}
+    to: ${ALERT_EMAIL:}
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tryItOutEnabled: true
+
+watchlist:
+  instruments:
+    - symbol: SOLUSDT
+      name: Solana
+      source: BINANCE
+      enabled: true
+      type: CRYPTO
+      oversold-threshold: 30
+      overbought-threshold: 70
+      timeframes: "1m,5m,1h,4h"
+    - symbol: BTCUSDT
+      name: Bitcoin
+      source: BINANCE
+      enabled: true
+      type: CRYPTO
+      oversold-threshold: 30
+      overbought-threshold: 70
+      timeframes: "1m,5m,1h,4h"
+    - symbol: ETHUSDT
+      name: Ethereum
+      source: BINANCE
+      enabled: true
+      type: CRYPTO
+      oversold-threshold: 30
+      overbought-threshold: 70
+      timeframes: "1m,5m,1h,4h"
