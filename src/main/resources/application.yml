@@ -80,7 +80,7 @@ watchlist:
       type: CRYPTO
       oversold-threshold: 30
       overbought-threshold: 70
-      timeframes: "1m,5m,1h,4h,1d"
+      timeframes: "15m,1h,4h"
     - symbol: BTCUSDT
       name: Bitcoin
       source: BINANCE
@@ -88,7 +88,7 @@ watchlist:
       type: CRYPTO
       oversold-threshold: 30
       overbought-threshold: 70
-      timeframes: "1m,5m,1h,4h,1d"
+      timeframes: "15m,1h,4h"
     - symbol: ETHUSDT
       name: Ethereum
       source: BINANCE
@@ -96,4 +96,12 @@ watchlist:
       type: CRYPTO
       oversold-threshold: 30
       overbought-threshold: 70
-      timeframes: "1m,5m,1h,4h,1d"
+      timeframes: "15m,1h,4h"
+    - symbol: GDAXI
+      name: DAX
+      source: FINNHUB
+      enabled: true
+      type: INDEX
+      oversold-threshold: 30
+      overbought-threshold: 70
+      timeframes: "15m,1h,4h"
