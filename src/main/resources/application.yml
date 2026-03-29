@@ -27,7 +27,9 @@ rsi:
   
   polling:
     interval-seconds: 30
-    
+
+  cooldown-minutes: 60
+
   quiet-hours:
     enabled: true
     start-hour: 2
@@ -85,6 +87,30 @@ notifications:
       password: ${SMTP_PASSWORD:}
     to: ${ALERT_EMAIL:}
 
+anomaly:
+  enabled: ${ANOMALY_DETECTION_ENABLED:true}
+  volume-spike:
+    enabled: true
+    std-dev-threshold: 4.0
+    lookback-periods: 20
+    min-periods-before-alert: 10
+    cooldown-minutes: 30
+  polymarket:
+    enabled: true
+    poll-interval-seconds: 300
+    odds-shift-threshold-percent: 8
+    window-minutes: 30
+    markets:
+      # Verify/update slugs at polymarket.com — these are examples for the documented patterns
+      - slug: will-the-us-strike-iran-in-2025
+        name: "US strikes on Iran"
+      - slug: will-there-be-a-russia-ukraine-ceasefire-in-2025
+        name: "Russia-Ukraine ceasefire"
+      - slug: will-north-korea-conduct-a-nuclear-test-in-2025
+        name: "North Korea nuclear test"
+      - slug: will-the-us-impose-new-tariffs-in-the-next-30-days
+        name: "US tariff announcement"
+
 springdoc:
   api-docs:
     path: /api-docs
@@ -131,7 +157,7 @@ watchlist:
     - symbol: IX.D.DAX.DAILY.IP
       name: DAX 40
       source: IG
-      enabled: true
+      enabled: false
       type: INDEX
       oversold-threshold: 30
       overbought-threshold: 70

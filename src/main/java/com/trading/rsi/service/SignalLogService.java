@@ -31,6 +31,7 @@ public class SignalLogService {
                 .currentPrice(signal.getCurrentPrice())
                 .rsi1m(signal.getRsiValues().get("1m"))
                 .rsi5m(signal.getRsiValues().get("5m"))
+                .rsi15m(signal.getRsiValues().get("15m"))
                 .rsi1h(signal.getRsiValues().get("1h"))
                 .rsi4h(signal.getRsiValues().get("4h"))
                 .timeframesAligned(signal.getTimeframesAligned())

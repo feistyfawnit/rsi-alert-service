@@ -46,7 +46,7 @@ public class SignalDetectionService {
                 warmupHistory(instrument, timeframe.trim());
             }
             
-            LinkedList<BigDecimal> history = priceHistoryService.getPriceHistory(key);
+            List<BigDecimal> history = priceHistoryService.getPriceHistory(key);
             
             if (history.isEmpty()) {
                 log.warn("No history available for {} {} (key: {})", instrument.getSymbol(), timeframe, key);
@@ -54,10 +54,10 @@ public class SignalDetectionService {
             }
             
             log.debug("{} {} history size={} last={}",
-                    instrument.getSymbol(), timeframe.trim(), history.size(), history.getLast());
+                    instrument.getSymbol(), timeframe.trim(), history.size(), history.get(history.size() - 1));
             
             if (currentPrice == null) {
-                currentPrice = history.getLast();
+                currentPrice = history.get(history.size() - 1);
             }
             
             BigDecimal rsi = rsiCalculator.calculateRsi(history, rsiPeriod);

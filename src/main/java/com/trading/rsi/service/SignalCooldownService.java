@@ -2,6 +2,7 @@ package com.trading.rsi.service;
 
 import com.trading.rsi.domain.SignalLog;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -11,8 +12,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @Slf4j
 public class SignalCooldownService {
-    
-    private static final int COOLDOWN_MINUTES = 60;
+
+    @Value("${rsi.cooldown-minutes:60}")
+    private int cooldownMinutes;
     
     private final Map<String, LocalDateTime> lastAlertTimes = new ConcurrentHashMap<>();
     
@@ -24,7 +26,7 @@ public class SignalCooldownService {
             return true;
         }
         
-        LocalDateTime cooldownExpiry = lastAlert.plusMinutes(COOLDOWN_MINUTES);
+        LocalDateTime cooldownExpiry = lastAlert.plusMinutes(cooldownMinutes);
         boolean shouldAlert = LocalDateTime.now().isAfter(cooldownExpiry);
         
         if (!shouldAlert) {

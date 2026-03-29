@@ -39,6 +39,9 @@ public class SignalLog {
     
     @Column(name = "rsi_5m", precision = 10, scale = 4)
     private BigDecimal rsi5m;
+
+    @Column(name = "rsi_15m", precision = 10, scale = 4)
+    private BigDecimal rsi15m;
     
     @Column(name = "rsi_1h", precision = 10, scale = 4)
     private BigDecimal rsi1h;

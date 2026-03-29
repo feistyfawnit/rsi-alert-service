@@ -1,121 +1,104 @@
-# Quick Start Guide - Get Running in 5 Minutes
+# Quick Start & Demo Guide
 
-## Step 1: Start the Application (2 minutes)
+## Step 1: Start the Application
 
 ```bash
-cd /Users/terryi/Windsurf/rsi-alert-service
-
-# Copy environment file (optional - works without Finnhub key for crypto only)
-cp .env.example .env
-
-# Start everything with Docker
+cp .env.example .env          # edit NTFY_TOPIC if you want a private topic
 docker-compose up -d
-
-# Wait 30 seconds for startup, then check logs
-docker-compose logs -f app
+docker-compose logs -f app    # wait for "Started RsiAlertServiceApplication"
 ```
 
-You should see logs showing:
-- ✅ Connected to PostgreSQL
-- ✅ Application started on port 8080
-- ✅ Polling market data for Solana, Bitcoin, Ethereum
+## Step 2: Subscribe to Notifications
 
-## Step 2: Subscribe to Notifications (1 minute)
+**Phone:** Install **ntfy** app → add topic `rsi-alerts` (or your custom topic from `.env`)  
+**Browser:** https://ntfy.sh/rsi-alerts
 
-**On your phone:**
-1. Install **ntfy** app (App Store or Play Store)
-2. Tap **+** to add topic
-3. Enter: `rsi-alerts`
-4. Done! You'll receive push notifications
-
-**On computer:**
-- Open browser to: https://ntfy.sh/rsi-alerts
-
-## Step 3: Wait for First Signal (~30 minutes)
-
-The app needs to build RSI history (28 candles minimum). First signals typically appear within 30-60 minutes depending on market volatility.
-
-**What you'll see:**
-- 🟢 **OVERSOLD** - All 4 timeframes RSI < 30 → Consider LONG
-- 🔴 **OVERBOUGHT** - All 4 timeframes RSI > 70 → Consider SHORT/EXIT
-- 🟡 **Partial signals** - 3 of 4 aligned → Early warning
-
-## Step 4: Verify It's Working
+## Step 3: Verify It's Working
 
 ```bash
-# Check enabled instruments
+# Instruments currently being monitored
 curl http://localhost:8080/api/instruments/enabled
 
-# Check recent signals (after 30+ mins)
+# Signals logged so far
 curl http://localhost:8080/api/signals/recent?hours=24
-
-# View live logs
-docker-compose logs -f app
 ```
 
-## Budget Confirmation
+---
 
-**Current setup: $0/month** ✅
-- Binance API: FREE
-- ntfy.sh: FREE  
-- Local Docker: FREE
+## Demo: Triggering Notifications Without Waiting
 
-**To deploy 24/7 on Railway: $0-5/month**
-- Railway free tier: 500 hours/month (enough for testing)
-- Railway Hobby plan: $5/month unlimited (if you need 24/7)
+### 1. RSI signal alert (labelled [TEST], fires immediately)
 
-## Optional: Add Finnhub for Indices/Stocks (Paid Plan Required)
+```bash
+curl -X POST http://localhost:8080/api/test/notify
+```
 
-If you want DAX, FTSE, Gold, Oil (not just crypto), you need a **paid Finnhub plan**:
+Sends a synthetic OVERSOLD signal for Solana. Shows title, RSI values, signal strength.
 
-1. Register at https://finnhub.io
-2. Subscribe to a paid plan (indices/stocks not included in free tier)
-3. Edit `.env`: `FINNHUB_API_KEY=your_key_here`
-4. Restart: `docker-compose restart app`
-5. Enable DAX in the database or add via API
+### 2. Volume spike anomaly alert
 
-**Note:** Finnhub free tier only supports crypto/forex. Indices require paid subscription.
+```bash
+curl -X POST "http://localhost:8080/api/test/anomaly?type=volume"
+```
+
+Fires a `⚠️ ANOMALY DETECTED` notification for a 4.8σ volume spike on SOL 15m.
+
+### 3. Polymarket odds shift anomaly alert
+
+```bash
+curl -X POST "http://localhost:8080/api/test/anomaly?type=polymarket"
+```
+
+Fires a `⚠️ ANOMALY DETECTED` notification for a 12.5pp odds shift on the US tariff market.
+
+### 4. Real RSI signal (uses live market data, not labelled [TEST])
+
+```bash
+# Lower thresholds so current price crosses — real alert fires on next poll (~30s)
+curl -X POST "http://localhost:8080/api/test/lower-thresholds?oversold=50&overbought=50"
+
+# Reset when done
+curl -X POST http://localhost:8080/api/test/reset-thresholds
+```
+
+⚠️ These fire real notifications without a [TEST] label. Reset thresholds immediately after.
+
+---
+
+## Active Instruments
+
+| Symbol | Name | Source | Timeframes |
+|--------|------|--------|------------|
+| SOLUSDT | Solana | Binance (free) | 15m, 1h, 4h |
+| BTCUSDT | Bitcoin | Binance (free) | 15m, 1h, 4h |
+| ETHUSDT | Ethereum | Binance (free) | 15m, 1h, 4h |
+| BCHUSDT | Bitcoin Cash | Binance (free) | 15m, 1h, 4h |
+| IX.D.DAX.DAILY.IP | DAX 40 | IG API | 15m, 1h, 4h |
+
+IG instruments require `IG_ENABLED=true` and credentials in `.env`. DAX is enabled in config; FTSE/S&P/Gold/Oil are seeded but `enabled: false`.
+
+## Phase Status
+
+- **Phase 1** ✅ Core RSI alerts, Binance crypto, ntfy.sh
+- **Phase 2** ✅ IG API integration (DAX, FTSE, Gold, Oil, S&P 500)
+- **Phase 3** ✅ Claude AI enrichment — enable with `CLAUDE_ENABLED=true` + API key
+- **Phase 4** ✅ Auto-execution scaffolded — **hard-disabled**, do not enable without paper trading
+- **Phase 5** ⏳ Volume spike detector live; Polymarket monitor live; cross-instrument correlation not yet built
 
 ## Troubleshooting
 
 **App won't start?**
 ```bash
-docker-compose down
-docker-compose up -d
+docker-compose down && docker-compose up -d
 docker-compose logs app
 ```
 
-**No signals after 1 hour?**
-- Check crypto markets are moving (they trade 24/7)
-- Verify logs show "Updated SOLUSDT" messages
-- RSI alignment is rare - you might wait 6-24 hours for first full signal
+**No signals after an hour?**
+- RSI alignment across 3 timeframes is rare — can take 6–24h
+- Check logs for `Updated SOLUSDT` messages to confirm polling is working
+- Use `POST /api/test/notify` to confirm ntfy delivery works independently
 
-**Need to stop everything?**
+**Wipe DB and restart fresh:**
 ```bash
-docker-compose down
+docker-compose down -v && docker-compose up -d
 ```
-
-**Need to wipe database and restart fresh?**
-```bash
-docker-compose down -v
-docker-compose up -d
-```
-
-## Next Steps After First Signal
-
-1. **Customize thresholds** - Edit instrument settings via API
-2. **Add more instruments** - See README.md API examples
-3. **Deploy to Railway** - For 24/7 monitoring
-4. **Phase 2 features** - IG API integration, performance tracking
-
----
-
-**Your budget constraint ($5/month) is covered.** The free tier setup costs $0, and Railway Hobby plan is exactly $5/month if you need always-on deployment.
-
-Given your situation (potential redundancy, mortgage, kids), I recommend:
-- Start with **free local Docker** for testing (1-2 weeks)
-- Validate strategy actually works for you
-- Only deploy to Railway ($5/month) once proven valuable
-- **Do not** rush to Phase 4 auto-trading until 3+ months of manual validation
-
-Stay safe with capital, test thoroughly before risking real money.

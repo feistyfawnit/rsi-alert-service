@@ -112,16 +112,17 @@ GET /api/signals/symbol/SOLUSDT
 GET /api/signals/recent?hours=24
 ```
 
-## Default Instruments (Phase 1)
+## Pre-Configured Instruments
 
 The app comes pre-configured with:
-- **Solana (SOLUSDT)** - Binance  
-- **Bitcoin (BTCUSDT)** - Binance  
+- **Solana (SOLUSDT)** - Binance
+- **Bitcoin (BTCUSDT)** - Binance
 - **Ethereum (ETHUSDT)** - Binance
+- **Bitcoin Cash (BCHUSDT)** - Binance
+- **DAX 40** - IG API (requires `IG_ENABLED=true` + credentials)
+- **FTSE 100, S&P 500, Gold, Oil** - IG API (seeded, set `enabled: true` in YAML)
 
-All crypto data is FREE via Binance API (no API key required).
-
-**Note:** DAX and other indices require a paid Finnhub plan (free tier doesn't include index data).
+All crypto data is FREE via Binance API (no API key required). Indices/commodities require an IG account.
 
 ## Adding More Instruments
 
@@ -136,24 +137,24 @@ curl -X POST http://localhost:8080/api/instruments \
     "source": "BINANCE",
     "type": "CRYPTO",
     "enabled": true,
-    "timeframes": "1m,5m,1h,4h"
+    "timeframes": "15m,1h,4h"
   }'
 ```
 
-### For Indices/Stocks (Requires Paid Finnhub Plan)
+### For Indices/Commodities (IG API — free with account)
 
-**Note:** Finnhub free tier (60 calls/min) does NOT include index/stock data. You need a paid plan.
+Requires `IG_ENABLED=true` and IG credentials in `.env`. Find epic codes at https://labs.ig.com/sample-apps/api-companion/index.html
 
 ```bash
 curl -X POST http://localhost:8080/api/instruments \
   -H "Content-Type: application/json" \
   -d '{
-    "symbol": "^GDAXI",
-    "name": "DAX",
-    "source": "FINNHUB",
+    "symbol": "IX.D.DAX.DAILY.IP",
+    "name": "DAX 40",
+    "source": "IG",
     "type": "INDEX",
     "enabled": true,
-    "timeframes": "5m,1h,4h"
+    "timeframes": "15m,1h,4h"
   }'
 ```
 
@@ -253,11 +254,15 @@ docker-compose restart postgres
 docker-compose ps
 ```
 
-## Future Phases
+## Phase Status
 
-- **Phase 2**: IG API integration, more instruments, performance tracking
-- **Phase 3**: Claude AI news summarization, signal commentary
-- **Phase 4**: Semi-automated trading with manual approval (HIGH RISK)
+- **Phase 1** ✅ — Core RSI alerts, Binance crypto, ntfy.sh notifications
+- **Phase 2** ✅ — IG API integration, DAX/FTSE/Gold/Oil/S&P 500 via IG
+- **Phase 3** ✅ — Claude AI enrichment built, enable with `CLAUDE_ENABLED=true` + API key
+- **Phase 4** ✅ — Auto-execution scaffolded, **hard-disabled** (`TRADING_AUTO_EXECUTION_ENABLED=false`) — do not enable without 3+ months paper trading
+- **Phase 5** ⏳ — Volume spike detector live; Polymarket monitor not yet built
+
+See `PHASE2_ROADMAP.md` for full status and next actions.
 
 ## Important Notes
 
