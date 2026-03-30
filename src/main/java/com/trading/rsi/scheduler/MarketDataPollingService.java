@@ -47,10 +47,18 @@ public class MarketDataPollingService {
         
         log.debug("Polling {} instruments", instruments.size());
         
-        for (Instrument instrument : instruments) {
+        for (int i = 0; i < instruments.size(); i++) {
+            Instrument instrument = instruments.get(i);
             try {
+                if (i > 0) {
+                    Thread.sleep(500);
+                }
                 updateInstrumentData(instrument);
                 signalDetectionService.analyzeInstrument(instrument);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                log.warn("Polling interrupted");
+                return;
             } catch (Exception e) {
                 log.error("Error processing instrument {}: {}", instrument.getSymbol(), e.getMessage(), e);
             }
@@ -84,8 +92,8 @@ public class MarketDataPollingService {
                                                 instrument.getSymbol(), trimmedTimeframe,
                                                 candleTimestamp, latestCandle.getClose());
                                     } else {
-                                        log.info("Skipping duplicate candle for {} {} at {} (last was {})", 
-                                                instrument.getSymbol(), trimmedTimeframe, 
+                                        log.debug("Skipping duplicate candle for {} {} at {} (last was {})",
+                                                instrument.getSymbol(), trimmedTimeframe,
                                                 candleTimestamp, lastTimestamp);
                                     }
                                 }

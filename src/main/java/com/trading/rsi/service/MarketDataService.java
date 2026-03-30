@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -59,9 +60,18 @@ public class MarketDataService {
                         .build())
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<List<List<?>>>() {})
-                .retryWhen(Retry.backoff(3, Duration.ofSeconds(2)))
+                .retryWhen(Retry.backoff(3, Duration.ofSeconds(2))
+                        .filter(e -> !(e instanceof WebClientResponseException wcre
+                                && (wcre.getStatusCode().value() == 418 || wcre.getStatusCode().value() == 429))))
                 .map(this::parseBinanceCandles)
-                .doOnError(e -> log.error("Error fetching Binance candles for {}: {}", symbol, e.getMessage()));
+                .doOnError(e -> {
+                    if (e instanceof WebClientResponseException wcre) {
+                        log.error("Binance HTTP {} for {} {}: {}",
+                                wcre.getStatusCode().value(), symbol, timeframe, binanceRateLimitHint(wcre.getStatusCode().value()));
+                    } else {
+                        log.error("Error fetching Binance candles for {} {}: {}", symbol, timeframe, e.getMessage());
+                    }
+                });
     }
     
     private Mono<List<Candle>> fetchFinnhubCandles(String symbol, String timeframe, int limit) {
@@ -163,6 +173,14 @@ public class MarketDataService {
         return endTime - (minutesPerCandle * 60L * limit);
     }
     
+    private static String binanceRateLimitHint(int status) {
+        return switch (status) {
+            case 418 -> "IP banned by Binance — retrying makes the ban longer. Wait before restarting.";
+            case 429 -> "Rate limit exceeded — reduce polling frequency or add delays between requests.";
+            default -> "Unexpected HTTP error";
+        };
+    }
+
     @lombok.Data
     private static class FinnhubCandleResponse {
         private List<BigDecimal> c;

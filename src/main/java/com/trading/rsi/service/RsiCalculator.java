@@ -4,14 +4,14 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.LinkedList;
+import java.util.List;
 
 @Service
 public class RsiCalculator {
     
     private static final int DEFAULT_PERIOD = 14;
     
-    public BigDecimal calculateRsi(LinkedList<BigDecimal> closePrices, int period) {
+    public BigDecimal calculateRsi(List<BigDecimal> closePrices, int period) {
         if (closePrices.size() < period + 1) {
             return null;
         }
@@ -59,7 +59,7 @@ public class RsiCalculator {
         return rsi;
     }
     
-    public BigDecimal calculateRsi(LinkedList<BigDecimal> closePrices) {
+    public BigDecimal calculateRsi(List<BigDecimal> closePrices) {
         return calculateRsi(closePrices, DEFAULT_PERIOD);
     }
 }

@@ -1,11 +1,13 @@
 # Quick Start & Demo Guide
 
+> **Prerequisite (macOS with Colima):** Start Docker runtime first  
+> `colima start`
+
 ## Step 1: Start the Application
 
 ```bash
 cp .env.example .env          # edit NTFY_TOPIC if you want a private topic
-docker-compose up -d
-docker-compose logs -f app    # wait for "Started RsiAlertServiceApplication"
+make up                       # starts Colima if needed, builds & runs app
 ```
 
 ## Step 2: Subscribe to Notifications
