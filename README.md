@@ -6,7 +6,7 @@ A production-grade Spring Boot service that monitors financial instruments for R
 
 ## Features
 
-- ✅ Real-time RSI calculation across multiple timeframes (1m, 5m, 1h, 4h)
+- ✅ Real-time RSI calculation across multiple timeframes (15m, 1h, 4h)
 - ✅ Multi-instrument support (crypto, indices, commodities, FX)
 - ✅ Instant push notifications via ntfy.sh
 - ✅ Free-tier market data (Binance for crypto, Finnhub for others)
@@ -18,8 +18,8 @@ A production-grade Spring Boot service that monitors financial instruments for R
 
 ## Tech Stack
 
-- Java 21
-- Spring Boot 3.2.3
+- Java 25
+- Spring Boot 3.5.3
 - PostgreSQL 16
 - WebFlux for reactive HTTP calls
 - Docker & Docker Compose
