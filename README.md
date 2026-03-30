@@ -1,8 +1,6 @@
 # RSI Multi-Timeframe Trading Alert Tool
 
-A Spring Boot service that monitors financial instruments for RSI alignment signals across multiple timeframes and sends instant notifications.
-
-**Private Use Only - Ivan Ty & Brian K**
+A production-grade Spring Boot service that monitors financial instruments for RSI alignment signals across multiple timeframes and sends instant push notifications. Monitors crypto (via Binance), indices and commodities (via IG API) in real time.
 
 **Repository:** `https://github.com/feistyfawnit/rsi-alert-service` (Private)
 
@@ -169,7 +167,7 @@ rsi:
   overbought-threshold: 70      # Default overbought threshold
   
   polling:
-    interval-seconds: 30        # How often to check for signals
+    interval-seconds: 60        # How often to check for signals
     
   quiet-hours:
     enabled: true
@@ -280,4 +278,4 @@ docker-compose logs -f app
 
 ---
 
-*Built with Windsurf AI - March 2026*
+*March 2026*

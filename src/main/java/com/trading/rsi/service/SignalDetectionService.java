@@ -14,7 +14,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Slf4j
@@ -29,8 +31,12 @@ public class SignalDetectionService {
     
     @Value("${rsi.period:14}")
     private int rsiPeriod;
-    
+
     private static final int MINIMUM_HISTORY = 28;
+    private static final long[] BACKOFF_MINUTES = {2, 5, 15, 60};
+
+    private final Map<String, Integer> warmupFailures = new ConcurrentHashMap<>();
+    private final Map<String, Instant> warmupBackoffUntil = new ConcurrentHashMap<>();
     
     public void analyzeInstrument(Instrument instrument) {
         List<String> timeframes = Arrays.asList(instrument.getTimeframes().split(","));
@@ -42,8 +48,12 @@ public class SignalDetectionService {
             log.debug("Analyzing {} with key: {}", instrument.getSymbol(), key);
             
             if (!priceHistoryService.hasMinimumHistory(key, MINIMUM_HISTORY)) {
+                if (isWarmupBackedOff(key)) {
+                    log.debug("Warmup backoff active for {} {} — next retry at {}", instrument.getSymbol(), timeframe.trim(), warmupBackoffUntil.get(key));
+                    continue;
+                }
                 log.info("Insufficient history for {} {}, warming up...", instrument.getSymbol(), timeframe);
-                warmupHistory(instrument, timeframe.trim());
+                warmupHistory(instrument, timeframe.trim(), key);
             }
             
             List<BigDecimal> history = priceHistoryService.getPriceHistory(key);
@@ -149,17 +159,33 @@ public class SignalDetectionService {
         return totalDeviation.divide(BigDecimal.valueOf(rsiValues.size()), 4, RoundingMode.HALF_UP);
     }
     
-    private void warmupHistory(Instrument instrument, String timeframe) {
+    private boolean isWarmupBackedOff(String key) {
+        Instant backoffUntil = warmupBackoffUntil.get(key);
+        return backoffUntil != null && Instant.now().isBefore(backoffUntil);
+    }
+
+    private void recordWarmupFailure(String key, String symbol, String timeframe) {
+        int failures = warmupFailures.merge(key, 1, (a, b) -> a + b);
+        int backoffIndex = Math.min(failures - 1, BACKOFF_MINUTES.length - 1);
+        long backoffMins = BACKOFF_MINUTES[backoffIndex];
+        warmupBackoffUntil.put(key, Instant.now().plusSeconds(backoffMins * 60));
+        log.warn("Warmup failed for {} {} (attempt {}) — backing off for {} min",
+                symbol, timeframe, failures, backoffMins);
+    }
+
+    private void recordWarmupSuccess(String key) {
+        warmupFailures.remove(key);
+        warmupBackoffUntil.remove(key);
+    }
+
+    private void warmupHistory(Instrument instrument, String timeframe, String key) {
         try {
             // WARNING: Blocking call - should only be called from non-reactive threads
             // (e.g., @Scheduled methods). Calling from reactive pipelines will cause errors.
             List<Candle> candles = marketDataService.fetchCandles(instrument, timeframe, MINIMUM_HISTORY)
                     .block(Duration.ofSeconds(10));
-            
+
             if (candles != null && !candles.isEmpty()) {
-                String key = priceHistoryService.buildKey(instrument.getSymbol(), timeframe);
-                
-                // Calculate min/max in single pass
                 BigDecimal firstPrice = candles.get(0).getClose();
                 BigDecimal lastPrice = candles.get(candles.size() - 1).getClose();
                 BigDecimal minPrice = firstPrice;
@@ -169,15 +195,19 @@ public class SignalDetectionService {
                     if (close.compareTo(minPrice) < 0) minPrice = close;
                     if (close.compareTo(maxPrice) > 0) maxPrice = close;
                 }
-                
+
                 log.info("Warmup {} {}: {} candles, first={}, last={}, min={}, max={}, range={}",
                         instrument.getSymbol(), timeframe, candles.size(),
                         firstPrice, lastPrice, minPrice, maxPrice, maxPrice.subtract(minPrice));
-                
+
                 candles.forEach(candle -> priceHistoryService.updatePriceHistory(key, candle));
+                recordWarmupSuccess(key);
+            } else {
+                recordWarmupFailure(key, instrument.getSymbol(), timeframe);
             }
         } catch (Exception e) {
             log.error("Error warming up history for {} {}: {}", instrument.getSymbol(), timeframe, e.getMessage());
+            recordWarmupFailure(key, instrument.getSymbol(), timeframe);
         }
     }
 }
