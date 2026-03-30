@@ -260,8 +260,6 @@ docker-compose ps
 - **Phase 4** ✅ — Auto-execution scaffolded, **hard-disabled** (`TRADING_AUTO_EXECUTION_ENABLED=false`) — do not enable without 3+ months paper trading
 - **Phase 5** ⏳ — Volume spike detector live; Polymarket monitor not yet built
 
-See `PHASE2_ROADMAP.md` for full status and next actions.
-
 ## Important Notes
 
 ⚠️ **This tool is for PERSONAL USE ONLY**  

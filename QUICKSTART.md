@@ -56,7 +56,7 @@ Fires a `⚠️ ANOMALY DETECTED` notification for a 12.5pp odds shift on the US
 ### 4. Real RSI signal (uses live market data, not labelled [TEST])
 
 ```bash
-# Lower thresholds so current price crosses — real alert fires on next poll (~30s)
+# Lower thresholds so current price crosses — real alert fires on next poll (~60s)
 curl -X POST "http://localhost:8080/api/test/lower-thresholds?oversold=50&overbought=50"
 
 # Reset when done
@@ -76,8 +76,11 @@ curl -X POST http://localhost:8080/api/test/reset-thresholds
 | ETHUSDT | Ethereum | Binance (free) | 15m, 1h, 4h |
 | BCHUSDT | Bitcoin Cash | Binance (free) | 15m, 1h, 4h |
 | IX.D.DAX.DAILY.IP | DAX 40 | IG API | 15m, 1h, 4h |
+| IX.D.FTSE.DAILY.IP | FTSE 100 | IG API | 15m, 1h, 4h |
+| IX.D.SPTRD.DAILY.IP | S&P 500 | IG API | 15m, 1h, 4h |
+| CS.D.USCGC.TODAY.IP | Gold (Spot) | IG API | 15m, 1h, 4h |
 
-IG instruments require `IG_ENABLED=true` and credentials in `.env`. DAX is enabled in config; FTSE/S&P/Gold/Oil are seeded but `enabled: false`.
+IG instruments require `IG_ENABLED=true` and credentials in `.env`. Oil is seeded but `enabled: false`.
 
 ## Phase Status
 
@@ -96,7 +99,7 @@ docker-compose logs app
 ```
 
 **No signals after an hour?**
-- RSI alignment across 3 timeframes is rare — can take 6–24h
+- RSI alignment across 3 timeframes is rare — can take 6–48h on quiet market days
 - Check logs for `Updated SOLUSDT` messages to confirm polling is working
 - Use `POST /api/test/notify` to confirm ntfy delivery works independently
 

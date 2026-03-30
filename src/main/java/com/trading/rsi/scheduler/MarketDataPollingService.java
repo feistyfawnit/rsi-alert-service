@@ -9,7 +9,6 @@ import com.trading.rsi.service.SignalDetectionService;
 import com.trading.rsi.service.VolumeAnomalyDetector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -32,10 +31,7 @@ public class MarketDataPollingService {
     
     // Track last candle timestamp per instrument+timeframe to avoid duplicate updates
     private final Map<String, Instant> lastCandleTimestamps = new ConcurrentHashMap<>();
-    
-    @Value("${rsi.polling.interval-seconds:30}")
-    private int pollingIntervalSeconds;
-    
+
     @Scheduled(fixedDelayString = "${rsi.polling.interval-seconds:30}000")
     public void pollMarketData() {
         List<Instrument> instruments = instrumentRepository.findByEnabledTrue();

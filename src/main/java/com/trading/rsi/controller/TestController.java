@@ -9,6 +9,7 @@ import com.trading.rsi.model.RsiSignal;
 import com.trading.rsi.repository.InstrumentRepository;
 import com.trading.rsi.service.IGAuthService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,6 +28,9 @@ public class TestController {
     private final ApplicationEventPublisher eventPublisher;
     private final InstrumentRepository instrumentRepository;
     private final IGAuthService igAuthService;
+
+    @Value("${notifications.ntfy.topic:rsi-alerts}")
+    private String ntfyTopic;
 
     @PostMapping("/notify")
     public ResponseEntity<Map<String, String>> triggerTestNotification() {
@@ -49,7 +53,7 @@ public class TestController {
         eventPublisher.publishEvent(new SignalEvent(this, signal));
         return ResponseEntity.ok(Map.of(
                 "status", "Test notification dispatched",
-                "check", "https://ntfy.sh/rsi-alerts"
+                "check", "https://ntfy.sh/" + ntfyTopic
         ));
     }
 
@@ -91,7 +95,7 @@ public class TestController {
         eventPublisher.publishEvent(new AnomalyEvent(this, alert));
         return ResponseEntity.ok(Map.of(
                 "status", "Anomaly test alert dispatched (type=" + type + ")",
-                "check", "https://ntfy.sh/rsi-alerts"
+                "check", "https://ntfy.sh/" + ntfyTopic
         ));
     }
 
