@@ -91,9 +91,9 @@ anomaly:
   enabled: ${ANOMALY_DETECTION_ENABLED:true}
   volume-spike:
     enabled: true
-    std-dev-threshold: 4.0
-    lookback-periods: 20
-    min-periods-before-alert: 10
+    std-dev-threshold: 5.5
+    lookback-periods: 30
+    min-periods-before-alert: 20
     cooldown-minutes: 30
   polymarket:
     enabled: true
