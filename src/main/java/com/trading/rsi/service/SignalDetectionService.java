@@ -93,11 +93,8 @@ public class SignalDetectionService {
         
         int oversoldCount = 0;
         int overboughtCount = 0;
-        BigDecimal sumRsi = BigDecimal.ZERO;
-        
+
         for (BigDecimal rsi : rsiValues.values()) {
-            sumRsi = sumRsi.add(rsi);
-            
             if (rsi.compareTo(BigDecimal.valueOf(instrument.getOversoldThreshold())) < 0) {
                 oversoldCount++;
             }
@@ -105,8 +102,6 @@ public class SignalDetectionService {
                 overboughtCount++;
             }
         }
-        
-        BigDecimal avgRsi = sumRsi.divide(BigDecimal.valueOf(rsiValues.size()), 4, RoundingMode.HALF_UP);
         
         SignalLog.SignalType signalType = null;
         int alignedCount = 0;

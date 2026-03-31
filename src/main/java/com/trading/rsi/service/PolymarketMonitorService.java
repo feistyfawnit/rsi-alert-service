@@ -60,7 +60,6 @@ public class PolymarketMonitorService {
                 );
     }
 
-    @SuppressWarnings("unchecked")
     private void processMarketData(String slug, String name, Map<String, Object> market) {
         Object outcomePricesRaw = market.get("outcomePrices");
         if (outcomePricesRaw == null) return;
