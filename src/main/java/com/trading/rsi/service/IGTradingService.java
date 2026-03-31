@@ -11,7 +11,6 @@ import com.trading.rsi.event.SignalEvent;
 import com.trading.rsi.domain.SignalLog;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 

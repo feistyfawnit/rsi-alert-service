@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalTime;
 import java.util.Map;
 
@@ -113,7 +113,7 @@ public class NotificationService {
                 .forEach(entry -> message.append("  ")
                         .append(entry.getKey())
                         .append(": ")
-                        .append(entry.getValue().setScale(2, BigDecimal.ROUND_HALF_UP))
+                        .append(entry.getValue().setScale(2, RoundingMode.HALF_UP))
                         .append("\n"));
         
         message.append("\nAction: ");

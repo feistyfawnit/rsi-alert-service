@@ -34,15 +34,19 @@ public class Instrument {
     @Column(nullable = false)
     private InstrumentType type;
     
+    @Builder.Default
     @Column(nullable = false)
     private Boolean enabled = true;
     
+    @Builder.Default
     @Column(name = "oversold_threshold")
     private Integer oversoldThreshold = 30;
     
+    @Builder.Default
     @Column(name = "overbought_threshold")
     private Integer overboughtThreshold = 70;
     
+    @Builder.Default
     @Column(name = "timeframes")
     private String timeframes = "1m,5m,1h,4h";
     

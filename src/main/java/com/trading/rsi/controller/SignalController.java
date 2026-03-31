@@ -3,7 +3,6 @@ package com.trading.rsi.controller;
 import com.trading.rsi.domain.SignalLog;
 import com.trading.rsi.repository.SignalLogRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
