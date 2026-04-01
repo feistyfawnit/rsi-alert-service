@@ -201,7 +201,7 @@ public class SignalDetectionService {
                 recordWarmupFailure(key, instrument.getSymbol(), timeframe);
             }
         } catch (Exception e) {
-            log.error("Error warming up history for {} {}: {}", instrument.getSymbol(), timeframe, e.getMessage());
+            log.warn("Error warming up history for {} {}: {}", instrument.getSymbol(), timeframe, e.getMessage());
             recordWarmupFailure(key, instrument.getSymbol(), timeframe);
         }
     }

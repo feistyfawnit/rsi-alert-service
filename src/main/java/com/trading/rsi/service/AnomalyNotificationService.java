@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalTime;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -27,12 +29,33 @@ public class AnomalyNotificationService {
     @Value("${notifications.ntfy.server-url:https://ntfy.sh}")
     private String ntfyServerUrl;
 
+    @Value("${rsi.quiet-hours.enabled:true}")
+    private boolean quietHoursEnabled;
+
+    @Value("${rsi.quiet-hours.start-hour:22}")
+    private int quietHoursStart;
+
+    @Value("${rsi.quiet-hours.end-hour:8}")
+    private int quietHoursEnd;
+
     @EventListener
     @Async
     public void handleAnomalyEvent(AnomalyEvent event) {
         if (!ntfyEnabled) return;
-        // Anomaly alerts bypass quiet hours — circuit breaker must always fire
-        sendUrgentAlert(event.getAlert());
+        AnomalyAlert alert = event.getAlert();
+        if (alert.getSeverity() != AnomalyAlert.Severity.CRITICAL && isQuietHours()) {
+            log.debug("Quiet hours — suppressing {} anomaly alert for {}", alert.getSeverity(), alert.getMarket());
+            return;
+        }
+        sendUrgentAlert(alert);
+    }
+
+    private boolean isQuietHours() {
+        if (!quietHoursEnabled) return false;
+        int hour = LocalTime.now().getHour();
+        return quietHoursStart > quietHoursEnd
+                ? hour >= quietHoursStart || hour < quietHoursEnd
+                : hour >= quietHoursStart && hour < quietHoursEnd;
     }
 
     private void sendUrgentAlert(AnomalyAlert alert) {

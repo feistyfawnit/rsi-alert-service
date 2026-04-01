@@ -32,8 +32,19 @@ rsi:
 
   quiet-hours:
     enabled: true
-    start-hour: 2
-    end-hour: 6
+    start-hour: 22
+    end-hour: 8
+
+  market-hours:
+    ig-start-utc: 8
+    ig-end-utc: 22
+
+  demo:
+    account-balance: 10000
+    risk-percent: 1
+    stop-percent-crypto: 2.0
+    stop-percent-index: 0.5
+    stop-percent-commodity: 1.0
     
   timeframes:
     - 1m

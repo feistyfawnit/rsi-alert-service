@@ -9,10 +9,13 @@ import com.trading.rsi.service.SignalDetectionService;
 import com.trading.rsi.service.VolumeAnomalyDetector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +32,12 @@ public class MarketDataPollingService {
     private final SignalDetectionService signalDetectionService;
     private final VolumeAnomalyDetector volumeAnomalyDetector;
     
+    @Value("${rsi.market-hours.ig-start-utc:6}")
+    private int igMarketStartUtc;
+
+    @Value("${rsi.market-hours.ig-end-utc:22}")
+    private int igMarketEndUtc;
+
     // Track last candle timestamp per instrument+timeframe to avoid duplicate updates
     private final Map<String, Instant> lastCandleTimestamps = new ConcurrentHashMap<>();
 
@@ -49,6 +58,11 @@ public class MarketDataPollingService {
                 if (i > 0) {
                     Thread.sleep(500);
                 }
+                if (isIgOutsideMarketHours(instrument)) {
+                    log.debug("Skipping {} — IG market closed (outside {:02d}:00–{:02d}:00 UTC)",
+                            instrument.getSymbol(), igMarketStartUtc, igMarketEndUtc);
+                    continue;
+                }
                 updateInstrumentData(instrument);
                 signalDetectionService.analyzeInstrument(instrument);
             } catch (InterruptedException ie) {
@@ -61,6 +75,14 @@ public class MarketDataPollingService {
         }
     }
     
+    private boolean isIgOutsideMarketHours(Instrument instrument) {
+        if (instrument.getSource() != Instrument.DataSource.IG) {
+            return false;
+        }
+        int hourUtc = ZonedDateTime.now(ZoneOffset.UTC).getHour();
+        return hourUtc < igMarketStartUtc || hourUtc >= igMarketEndUtc;
+    }
+
     private void updateInstrumentData(Instrument instrument) {
         List<String> timeframes = Arrays.asList(instrument.getTimeframes().split(","));
         
@@ -94,7 +116,7 @@ public class MarketDataPollingService {
                                     }
                                 }
                             },
-                            error -> log.error("Error fetching candles for {} {}: {}", 
+                            error -> log.warn("Failed to fetch candles for {} {}: {}", 
                                     instrument.getSymbol(), trimmedTimeframe, error.getMessage())
                     );
         }

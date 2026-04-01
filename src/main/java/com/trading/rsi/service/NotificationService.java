@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalTime;
 import java.util.Map;
@@ -38,11 +39,26 @@ public class NotificationService {
     @Value("${rsi.quiet-hours.enabled:true}")
     private boolean quietHoursEnabled;
     
-    @Value("${rsi.quiet-hours.start-hour:2}")
+    @Value("${rsi.quiet-hours.start-hour:22}")
     private int quietHoursStart;
     
-    @Value("${rsi.quiet-hours.end-hour:6}")
+    @Value("${rsi.quiet-hours.end-hour:8}")
     private int quietHoursEnd;
+
+    @Value("${rsi.demo.account-balance:10000}")
+    private int demoAccountBalance;
+
+    @Value("${rsi.demo.risk-percent:1}")
+    private int demoRiskPercent;
+
+    @Value("${rsi.demo.stop-percent-crypto:2.0}")
+    private double stopPercentCrypto;
+
+    @Value("${rsi.demo.stop-percent-index:0.5}")
+    private double stopPercentIndex;
+
+    @Value("${rsi.demo.stop-percent-commodity:1.0}")
+    private double stopPercentCommodity;
     
     @EventListener
     @Async
@@ -124,11 +140,62 @@ public class NotificationService {
             case PARTIAL_OVERBOUGHT -> "Watch for full alignment - potential SHORT/EXIT";
         });
 
+        message.append("\n").append(buildDemoGuidance(signal));
+
         if (aiContext != null && !aiContext.isBlank()) {
             message.append("\n\n📰 AI Context:\n").append(aiContext);
         }
         
         return message.toString();
+    }
+
+    private String buildDemoGuidance(RsiSignal signal) {
+        double stopPct = inferStopPercent(signal.getSymbol());
+        boolean isLong = signal.getSignalType() == com.trading.rsi.domain.SignalLog.SignalType.OVERSOLD
+                || signal.getSignalType() == com.trading.rsi.domain.SignalLog.SignalType.PARTIAL_OVERSOLD;
+        boolean isPartial = signal.getSignalType() == com.trading.rsi.domain.SignalLog.SignalType.PARTIAL_OVERSOLD
+                || signal.getSignalType() == com.trading.rsi.domain.SignalLog.SignalType.PARTIAL_OVERBOUGHT;
+
+        BigDecimal entry = signal.getCurrentPrice();
+        BigDecimal stopMultiplier = BigDecimal.valueOf(stopPct / 100.0);
+        BigDecimal stop = isLong
+                ? entry.multiply(BigDecimal.ONE.subtract(stopMultiplier)).setScale(2, RoundingMode.HALF_UP)
+                : entry.multiply(BigDecimal.ONE.add(stopMultiplier)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal stopDistance = entry.subtract(stop).abs();
+
+        BigDecimal riskAmount = BigDecimal.valueOf(demoAccountBalance)
+                .multiply(BigDecimal.valueOf(demoRiskPercent / 100.0))
+                .setScale(2, RoundingMode.HALF_UP);
+        String sizeGuide = stopDistance.compareTo(BigDecimal.ZERO) > 0
+                ? riskAmount.divide(stopDistance, 4, RoundingMode.HALF_UP).toPlainString()
+                : "n/a";
+
+        String direction = isLong ? "GO LONG (BUY)" : "GO SHORT (SELL)";
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n📊 Demo Guidance:\n");
+        if (isPartial) {
+            sb.append("Status: Watching — ").append(signal.getTimeframesAligned())
+              .append("/").append(signal.getTotalTimeframes()).append(" TFs aligned, not yet full signal\n");
+            sb.append("If confirmed: ").append(direction).append("\n");
+        } else {
+            sb.append("Direction: ").append(direction).append("\n");
+        }
+        sb.append("Entry: ~").append(entry.setScale(2, RoundingMode.HALF_UP)).append("\n");
+        sb.append("Stop: ").append(stop).append(" (").append(stopPct).append("% ").append(isLong ? "below" : "above").append(" entry)\n");
+        sb.append("Risk £").append(riskAmount.toPlainString()).append(" (").append(demoRiskPercent)
+          .append("% of £").append(demoAccountBalance).append(") → size ≈ ").append(sizeGuide).append(" units\n");
+        if (isPartial) {
+            sb.append("⚠️ Wait for 3/3 TF alignment before entering");
+        } else {
+            sb.append("✅ Act on IG demo — confirm on chart first");
+        }
+        return sb.toString();
+    }
+
+    private double inferStopPercent(String symbol) {
+        if (symbol.startsWith("IX.")) return stopPercentIndex;
+        if (symbol.startsWith("CS.") || symbol.startsWith("CC.")) return stopPercentCommodity;
+        return stopPercentCrypto;
     }
     
     private String getTagsForSignal(RsiSignal signal) {

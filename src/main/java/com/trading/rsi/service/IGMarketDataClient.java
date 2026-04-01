@@ -53,7 +53,6 @@ public class IGMarketDataClient {
                 .retryWhen(Retry.backoff(2, Duration.ofSeconds(3)))
                 .map(this::parseCandles)
                 .doOnError(e -> {
-                    log.error("IG candle fetch failed for {} {}: {}", epic, timeframe, e.getMessage());
                     if (e.getMessage() != null && e.getMessage().contains("403")) {
                         authService.invalidateSession();
                     }
