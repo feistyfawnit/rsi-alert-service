@@ -32,7 +32,7 @@ public class MarketDataPollingService {
     private final SignalDetectionService signalDetectionService;
     private final VolumeAnomalyDetector volumeAnomalyDetector;
     
-    @Value("${rsi.market-hours.ig-start-utc:6}")
+    @Value("${rsi.market-hours.ig-start-utc:8}")
     private int igMarketStartUtc;
 
     @Value("${rsi.market-hours.ig-end-utc:22}")
@@ -59,7 +59,7 @@ public class MarketDataPollingService {
                     Thread.sleep(500);
                 }
                 if (isIgOutsideMarketHours(instrument)) {
-                    log.debug("Skipping {} — IG market closed (outside {:02d}:00–{:02d}:00 UTC)",
+                    log.debug("Skipping {} — IG market closed (outside {}:00–{}:00 UTC)",
                             instrument.getSymbol(), igMarketStartUtc, igMarketEndUtc);
                     continue;
                 }

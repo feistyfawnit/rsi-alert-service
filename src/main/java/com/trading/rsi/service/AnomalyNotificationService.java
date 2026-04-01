@@ -89,19 +89,29 @@ public class AnomalyNotificationService {
 
         switch (alert.getType()) {
             case POLYMARKET_ODDS_SHIFT -> {
-                double shift = ((Number) alert.getDetails().get("shiftPp")).doubleValue();
-                double prob = ((Number) alert.getDetails().get("yesProbabilityPct")).doubleValue();
-                int window = ((Number) alert.getDetails().get("windowMinutes")).intValue();
-                sb.append(String.format("Odds shift: +%.1fpp in %d min%n", shift, window));
-                sb.append(String.format("Current YES probability: %.1f%%%n", prob));
+                Object shiftObj = alert.getDetails().get("shiftPp");
+                Object probObj = alert.getDetails().get("yesProbabilityPct");
+                Object windowObj = alert.getDetails().get("windowMinutes");
+                if (shiftObj instanceof Number && probObj instanceof Number && windowObj instanceof Number) {
+                    double shift = ((Number) shiftObj).doubleValue();
+                    double prob = ((Number) probObj).doubleValue();
+                    int window = ((Number) windowObj).intValue();
+                    sb.append(String.format("Odds shift: +%.1fpp in %d min%n", shift, window));
+                    sb.append(String.format("Current YES probability: %.1f%%%n", prob));
+                }
                 sb.append("Correlated instruments may move — review open positions.\n");
             }
             case VOLUME_SPIKE -> {
-                double z = ((Number) alert.getDetails().get("zScore")).doubleValue();
-                double vol = ((Number) alert.getDetails().get("currentVolume")).doubleValue();
-                double mean = ((Number) alert.getDetails().get("baselineMean")).doubleValue();
-                sb.append(String.format("Volume: %.0f vs baseline %.0f%n", vol, mean));
-                sb.append(String.format("Z-score: %.1f\u03c3 above normal%n", z));
+                Object zObj = alert.getDetails().get("zScore");
+                Object volObj = alert.getDetails().get("currentVolume");
+                Object meanObj = alert.getDetails().get("baselineMean");
+                if (volObj instanceof Number && meanObj instanceof Number && zObj instanceof Number) {
+                    double z = ((Number) zObj).doubleValue();
+                    double vol = ((Number) volObj).doubleValue();
+                    double mean = ((Number) meanObj).doubleValue();
+                    sb.append(String.format("Volume: %.0f vs baseline %.0f%n", vol, mean));
+                    sb.append(String.format("Z-score: %.1f\u03c3 above normal%n", z));
+                }
             }
             case CROSS_CORRELATION -> {
                 sb.append("Multiple anomaly signals coinciding — elevated manipulation risk.\n");

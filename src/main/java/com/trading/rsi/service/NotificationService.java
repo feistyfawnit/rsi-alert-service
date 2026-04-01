@@ -1,5 +1,6 @@
 package com.trading.rsi.service;
 
+import com.trading.rsi.domain.SignalLog;
 import com.trading.rsi.event.SignalEvent;
 import com.trading.rsi.model.RsiSignal;
 import lombok.RequiredArgsConstructor;
@@ -151,10 +152,10 @@ public class NotificationService {
 
     private String buildDemoGuidance(RsiSignal signal) {
         double stopPct = inferStopPercent(signal.getSymbol());
-        boolean isLong = signal.getSignalType() == com.trading.rsi.domain.SignalLog.SignalType.OVERSOLD
-                || signal.getSignalType() == com.trading.rsi.domain.SignalLog.SignalType.PARTIAL_OVERSOLD;
-        boolean isPartial = signal.getSignalType() == com.trading.rsi.domain.SignalLog.SignalType.PARTIAL_OVERSOLD
-                || signal.getSignalType() == com.trading.rsi.domain.SignalLog.SignalType.PARTIAL_OVERBOUGHT;
+        boolean isLong = signal.getSignalType() == SignalLog.SignalType.OVERSOLD
+                || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD;
+        boolean isPartial = signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD
+                || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERBOUGHT;
 
         BigDecimal entry = signal.getCurrentPrice();
         BigDecimal stopMultiplier = BigDecimal.valueOf(stopPct / 100.0);
@@ -185,7 +186,8 @@ public class NotificationService {
         sb.append("Risk £").append(riskAmount.toPlainString()).append(" (").append(demoRiskPercent)
           .append("% of £").append(demoAccountBalance).append(") → size ≈ ").append(sizeGuide).append(" units\n");
         if (isPartial) {
-            sb.append("⚠️ Wait for 3/3 TF alignment before entering");
+            sb.append("⚠️ Wait for ").append(signal.getTotalTimeframes())
+              .append("/").append(signal.getTotalTimeframes()).append(" TF alignment before entering");
         } else {
             sb.append("✅ Act on IG demo — confirm on chart first");
         }
@@ -214,10 +216,8 @@ public class NotificationService {
         
         int currentHour = LocalTime.now().getHour();
         
-        if (quietHoursStart < quietHoursEnd) {
-            return currentHour >= quietHoursStart && currentHour < quietHoursEnd;
-        } else {
-            return currentHour >= quietHoursStart || currentHour < quietHoursEnd;
-        }
+        return quietHoursStart > quietHoursEnd
+                ? currentHour >= quietHoursStart || currentHour < quietHoursEnd
+                : currentHour >= quietHoursStart && currentHour < quietHoursEnd;
     }
 }
