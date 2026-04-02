@@ -42,6 +42,7 @@ rsi:
 
   demo:
     account-balance: 10000
+    account-currency: EUR
     risk-percent: 1
     stop-percent-crypto: 2.0
     stop-percent-index: 0.5

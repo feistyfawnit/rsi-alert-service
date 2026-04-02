@@ -60,6 +60,9 @@ public class NotificationService {
 
     @Value("${rsi.demo.stop-percent-commodity:1.0}")
     private double stopPercentCommodity;
+
+    @Value("${rsi.demo.account-currency:EUR}")
+    private String accountCurrency;
     
     @EventListener
     @Async
@@ -156,40 +159,43 @@ public class NotificationService {
                 || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD;
         boolean isPartial = signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD
                 || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERBOUGHT;
+        boolean isCrypto = !signal.getSymbol().startsWith("IX.") && !signal.getSymbol().startsWith("CS.")
+                && !signal.getSymbol().startsWith("CC.");
 
         BigDecimal entry = signal.getCurrentPrice();
-        BigDecimal stopMultiplier = BigDecimal.valueOf(stopPct / 100.0);
-        BigDecimal stop = isLong
-                ? entry.multiply(BigDecimal.ONE.subtract(stopMultiplier)).setScale(2, RoundingMode.HALF_UP)
-                : entry.multiply(BigDecimal.ONE.add(stopMultiplier)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal stopDistance = entry.subtract(stop).abs();
+        long stopPts = Math.round(entry.doubleValue() * stopPct / 100.0);
+        long limitPts = stopPts * 2;
 
         BigDecimal riskAmount = BigDecimal.valueOf(demoAccountBalance)
                 .multiply(BigDecimal.valueOf(demoRiskPercent / 100.0))
                 .setScale(2, RoundingMode.HALF_UP);
-        String sizeGuide = stopDistance.compareTo(BigDecimal.ZERO) > 0
-                ? riskAmount.divide(stopDistance, 4, RoundingMode.HALF_UP).toPlainString()
+        String sizePerPoint = stopPts > 0
+                ? riskAmount.divide(BigDecimal.valueOf(stopPts), 2, RoundingMode.HALF_UP).toPlainString()
                 : "n/a";
 
         String direction = isLong ? "GO LONG (BUY)" : "GO SHORT (SELL)";
         StringBuilder sb = new StringBuilder();
-        sb.append("\n📊 Demo Guidance:\n");
+        sb.append("\n📊 Demo Guidance (Spread Bet):\n");
         if (isPartial) {
             sb.append("Status: Watching — ").append(signal.getTimeframesAligned())
-              .append("/").append(signal.getTotalTimeframes()).append(" TFs aligned, not yet full signal\n");
+              .append("/").append(signal.getTotalTimeframes()).append(" TFs aligned, not full yet\n");
             sb.append("If confirmed: ").append(direction).append("\n");
         } else {
             sb.append("Direction: ").append(direction).append("\n");
         }
-        sb.append("Entry: ~").append(entry.setScale(2, RoundingMode.HALF_UP)).append("\n");
-        sb.append("Stop: ").append(stop).append(" (").append(stopPct).append("% ").append(isLong ? "below" : "above").append(" entry)\n");
-        sb.append("Risk £").append(riskAmount.toPlainString()).append(" (").append(demoRiskPercent)
-          .append("% of £").append(demoAccountBalance).append(") → size ≈ ").append(sizeGuide).append(" units\n");
+        sb.append("Size: ").append(sizePerPoint).append(" ").append(accountCurrency)
+          .append("/pt (max loss ").append(accountCurrency).append(" ").append(riskAmount.toPlainString()).append(")\n");
+        sb.append("Stop: ").append(stopPts).append(" pts away (").append(stopPct).append("% below entry)\n");
+        sb.append("Limit: ").append(limitPts).append(" pts away (2:1 — profit ").append(accountCurrency)
+          .append(" ").append(riskAmount.multiply(java.math.BigDecimal.valueOf(2)).toPlainString()).append(")\n");
+        if (isCrypto) {
+            sb.append("⚠️ Crypto price is USD — recalc stop: IG entry x ").append(stopPct).append("%\n");
+        }
         if (isPartial) {
-            sb.append("⚠️ Wait for ").append(signal.getTotalTimeframes())
-              .append("/").append(signal.getTotalTimeframes()).append(" TF alignment before entering");
+            sb.append("⏳ Wait for ").append(signal.getTotalTimeframes()).append("/")
+              .append(signal.getTotalTimeframes()).append(" TF alignment before entering");
         } else {
-            sb.append("✅ Act on IG demo — confirm on chart first");
+            sb.append("✅ Confirm on chart, then place on IG demo");
         }
         return sb.toString();
     }
