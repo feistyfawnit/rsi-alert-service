@@ -47,6 +47,11 @@ public class VolumeAnomalyDetector {
 
         double mean = baseline.stream().mapToDouble(BigDecimal::doubleValue).average().orElse(0);
         if (mean == 0) return;
+        if (mean < cfg.getMinBaselineVolume()) {
+            log.debug("Skipping anomaly check for {}:{} — baseline volume too low ({} < {})",
+                    symbol, timeframe, String.format("%.1f", mean), String.format("%.1f", cfg.getMinBaselineVolume()));
+            return;
+        }
 
         double variance = baseline.stream()
                 .mapToDouble(v -> Math.pow(v.doubleValue() - mean, 2))

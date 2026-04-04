@@ -14,7 +14,8 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.Map;
 
 @Service
@@ -72,13 +73,18 @@ public class NotificationService {
             return;
         }
         
-        if (isQuietHours()) {
-            log.info("Quiet hours active, skipping alert for {}", event.getSignal().getSymbol());
+        RsiSignal signal = event.getSignal();
+        boolean isFullSignal = signal.getTimeframesAligned() >= signal.getTotalTimeframes();
+        if (!isFullSignal && isQuietHours()) {
+            log.debug("Quiet hours active, suppressing partial signal for {}", signal.getSymbol());
             return;
         }
+        if (isFullSignal && isQuietHours()) {
+            log.info("Quiet hours but FULL signal — sending for {}", signal.getSymbol());
+        }
         
-        String aiContext = claudeEnrichmentService.enrichSignal(event.getSignal());
-        sendNtfyNotification(event.getSignal(), aiContext);
+        String aiContext = claudeEnrichmentService.enrichSignal(signal);
+        sendNtfyNotification(signal, aiContext);
     }
     
     private void sendNtfyNotification(RsiSignal signal, String aiContext) {
@@ -144,6 +150,26 @@ public class NotificationService {
             case PARTIAL_OVERBOUGHT -> "Watch for full alignment - potential SHORT/EXIT";
         });
 
+        boolean isPartial = signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD
+                || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERBOUGHT;
+        if (isPartial) {
+            boolean oversoldSignal = signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD;
+            double threshold = oversoldSignal ? 30.0 : 70.0;
+            message.append("\n⏳ Waiting on:");
+            signal.getRsiValues().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> {
+                        double rsi = entry.getValue().doubleValue();
+                        boolean aligned = oversoldSignal ? rsi < threshold : rsi > threshold;
+                        if (!aligned) {
+                            double gap = oversoldSignal ? rsi - threshold : threshold - rsi;
+                            message.append(String.format(" %s RSI %.1f → needs %s%.0f (%.1f pts away)",
+                                    entry.getKey(), rsi, oversoldSignal ? "<" : ">",
+                                    threshold, gap));
+                        }
+                    });
+        }
+
         message.append("\n").append(buildDemoGuidance(signal));
 
         if (aiContext != null && !aiContext.isBlank()) {
@@ -185,7 +211,8 @@ public class NotificationService {
         }
         sb.append("Size: ").append(sizePerPoint).append(" ").append(accountCurrency)
           .append("/pt (max loss ").append(accountCurrency).append(" ").append(riskAmount.toPlainString()).append(")\n");
-        sb.append("Stop: ").append(stopPts).append(" pts away (").append(stopPct).append("% below entry)\n");
+        sb.append("Stop: ").append(stopPts).append(" pts away (").append(stopPct)
+          .append(isLong ? "% below entry" : "% above entry").append(")\n");
         sb.append("Limit: ").append(limitPts).append(" pts away (2:1 — profit ").append(accountCurrency)
           .append(" ").append(riskAmount.multiply(java.math.BigDecimal.valueOf(2)).toPlainString()).append(")\n");
         if (isCrypto) {
@@ -220,7 +247,7 @@ public class NotificationService {
             return false;
         }
         
-        int currentHour = LocalTime.now().getHour();
+        int currentHour = ZonedDateTime.now(ZoneOffset.UTC).getHour();
         
         return quietHoursStart > quietHoursEnd
                 ? currentHour >= quietHoursStart || currentHour < quietHoursEnd

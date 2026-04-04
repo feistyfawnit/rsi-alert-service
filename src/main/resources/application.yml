@@ -108,6 +108,7 @@ anomaly:
     lookback-periods: 30
     min-periods-before-alert: 20
     cooldown-minutes: 60
+    min-baseline-volume: 200
   polymarket:
     enabled: true
     poll-interval-seconds: 300
@@ -202,7 +203,23 @@ watchlist:
     - symbol: CC.D.LCO.FSD.IP
       name: Oil (Brent)
       source: IG
-      enabled: false
+      enabled: true
+      type: COMMODITY
+      oversold-threshold: 30
+      overbought-threshold: 70
+      timeframes: "15m,1h,4h"
+    - symbol: IX.D.NASDAQ.DAILY.IP
+      name: Nasdaq 100
+      source: IG
+      enabled: true
+      type: INDEX
+      oversold-threshold: 30
+      overbought-threshold: 70
+      timeframes: "15m,1h,4h"
+    - symbol: CS.D.SLVR.TODAY.IP
+      name: Silver
+      source: IG
+      enabled: true
       type: COMMODITY
       oversold-threshold: 30
       overbought-threshold: 70

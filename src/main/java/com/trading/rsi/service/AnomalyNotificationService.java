@@ -11,7 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 
 @Service
 @Slf4j
@@ -52,7 +53,7 @@ public class AnomalyNotificationService {
 
     private boolean isQuietHours() {
         if (!quietHoursEnabled) return false;
-        int hour = LocalTime.now().getHour();
+        int hour = ZonedDateTime.now(ZoneOffset.UTC).getHour();
         return quietHoursStart > quietHoursEnd
                 ? hour >= quietHoursStart || hour < quietHoursEnd
                 : hour >= quietHoursStart && hour < quietHoursEnd;

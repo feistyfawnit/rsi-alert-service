@@ -171,16 +171,16 @@ rsi:
     
   quiet-hours:
     enabled: true
-    start-hour: 2               # 2 AM
-    end-hour: 6                 # 6 AM (no alerts during this window)
+    start-hour: 22              # 10 PM UTC (11 PM BST)
+    end-hour: 8                 # 8 AM UTC (9 AM BST) — full signals bypass quiet hours
 ```
 
 ## Signal Types
 
 - **OVERSOLD (🟢)**: ALL timeframes RSI < 30 → **BUY SIGNAL**
 - **OVERBOUGHT (🔴)**: ALL timeframes RSI > 70 → **SELL SIGNAL**  
-- **PARTIAL_OVERSOLD (🟡)**: 3 of 4 timeframes oversold → Early warning
-- **PARTIAL_OVERBOUGHT (🟠)**: 3 of 4 timeframes overbought → Early warning
+- **PARTIAL_OVERSOLD (🟡)**: 2 of 3 timeframes oversold → Early warning (suppressed during quiet hours)
+- **PARTIAL_OVERBOUGHT (🟠)**: 2 of 3 timeframes overbought → Early warning (suppressed during quiet hours)
 
 ## Deployment to Railway (Optional - $5/month)
 
@@ -258,7 +258,7 @@ docker-compose ps
 - **Phase 2** ✅ — IG API integration, DAX/FTSE/Gold/Oil/S&P 500 via IG
 - **Phase 3** ✅ — Claude AI enrichment built, enable with `CLAUDE_ENABLED=true` + API key
 - **Phase 4** ✅ — Auto-execution scaffolded, **hard-disabled** (`TRADING_AUTO_EXECUTION_ENABLED=false`) — do not enable without 3+ months paper trading
-- **Phase 5** ⏳ — Volume spike detector live; Polymarket monitor not yet built
+- **Phase 5** ✅ — Volume spike detector live; Polymarket monitor live (geopolitical odds shifts)
 
 ## Important Notes
 

@@ -113,7 +113,7 @@ public class MarketDataService {
     }
     
     private List<Candle> parseFinnhubCandles(FinnhubCandleResponse response) {
-        if (response.getS().equals("no_data")) {
+        if ("no_data".equals(response.getS())) {
             return List.of();
         }
         

@@ -23,6 +23,7 @@ public class AnomalyProperties {
         private int lookbackPeriods = 20;
         private int minPeriodsBeforeAlert = 10;
         private int cooldownMinutes = 30;
+        private double minBaselineVolume = 50.0;
     }
 
     @Data

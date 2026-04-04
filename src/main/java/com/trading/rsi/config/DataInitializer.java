@@ -43,8 +43,10 @@ public class DataInitializer implements ApplicationRunner {
                 seeded++;
             } else {
                 Instrument instrument = existing.get();
+                instrument.setName(config.getName());
                 instrument.setEnabled(config.getEnabled());
                 instrument.setSource(config.getSource());
+                instrument.setType(config.getType());
                 instrument.setOversoldThreshold(config.getOversoldThreshold());
                 instrument.setOverboughtThreshold(config.getOverboughtThreshold());
                 instrument.setTimeframes(config.getTimeframes());
