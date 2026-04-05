@@ -11,4 +11,5 @@ import java.util.List;
 public interface SignalLogRepository extends JpaRepository<SignalLog, Long> {
     List<SignalLog> findBySymbolOrderByCreatedAtDesc(String symbol);
     List<SignalLog> findByCreatedAtAfter(LocalDateTime after);
+    List<SignalLog> findByCreatedAtBefore(LocalDateTime before);
 }

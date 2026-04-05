@@ -42,6 +42,9 @@ public class SignalLog {
 
     @Column(name = "rsi_15m", precision = 10, scale = 4)
     private BigDecimal rsi15m;
+
+    @Column(name = "rsi_30m", precision = 10, scale = 4)
+    private BigDecimal rsi30m;
     
     @Column(name = "rsi_1h", precision = 10, scale = 4)
     private BigDecimal rsi1h;
@@ -67,6 +70,8 @@ public class SignalLog {
         OVERSOLD,
         OVERBOUGHT,
         PARTIAL_OVERSOLD,
-        PARTIAL_OVERBOUGHT
+        PARTIAL_OVERBOUGHT,
+        WATCH_OVERSOLD,
+        WATCH_OVERBOUGHT
     }
 }

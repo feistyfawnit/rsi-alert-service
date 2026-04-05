@@ -47,6 +47,15 @@ public class MarketDataService {
                     "Twelve Data free tier rate limits (8/min) are too low for real-time polling — use IG API instead"));
         };
     }
+
+    public Mono<List<Candle>> fetchCandlesInRange(Instrument instrument, String timeframe, Instant from, Instant to) {
+        return switch (instrument.getSource()) {
+            case IG -> igMarketDataClient.fetchCandlesInRange(instrument.getSymbol(), timeframe, from, to);
+            default -> Mono.error(new UnsupportedOperationException(
+                    "Date-range fetch not supported for source: " + instrument.getSource()
+                    + " — only IG instruments support historical retrospective analysis"));
+        };
+    }
     
     private Mono<List<Candle>> fetchBinanceCandles(String symbol, String timeframe, int limit) {
         String interval = convertTimeframeToBinanceInterval(timeframe);

@@ -60,6 +60,19 @@ public class DataInitializer implements ApplicationRunner {
             log.info("Data initializer complete: {} seeded, {} synced from YAML", seeded, updated);
         }
 
-        log.info("Monitoring {} enabled instruments", instrumentRepository.findByEnabledTrue().size());
+        var enabled = instrumentRepository.findByEnabledTrue();
+        log.info("Monitoring {} enabled instruments:", enabled.size());
+        for (var inst : enabled) {
+            log.info("  {} ({}) — source={}, timeframes={}", inst.getName(), inst.getSymbol(), inst.getSource(), inst.getTimeframes());
+        }
+
+        long igCount = enabled.stream().filter(i -> i.getSource() == Instrument.DataSource.IG).count();
+        long binanceCount = enabled.stream().filter(i -> i.getSource() == Instrument.DataSource.BINANCE).count();
+        if (igCount > 0) {
+            log.info("IG instruments: {} configured — requires IG_ENABLED=true + credentials (market hours 08:00-22:00 UTC)", igCount);
+        }
+        if (binanceCount > 0) {
+            log.info("Binance instruments: {} configured — active 24/7", binanceCount);
+        }
     }
 }

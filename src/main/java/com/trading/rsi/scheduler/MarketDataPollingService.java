@@ -19,6 +19,7 @@ import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -41,6 +42,9 @@ public class MarketDataPollingService {
     // Track last candle timestamp per instrument+timeframe to avoid duplicate updates
     private final Map<String, Instant> lastCandleTimestamps = new ConcurrentHashMap<>();
 
+    // Log IG market-closed skip once per instrument per session (avoids log spam)
+    private final Set<String> igSkipLoggedOnce = ConcurrentHashMap.newKeySet();
+
     @Scheduled(fixedDelayString = "${rsi.polling.interval-seconds:30}000")
     public void pollMarketData() {
         List<Instrument> instruments = instrumentRepository.findByEnabledTrue();
@@ -59,9 +63,14 @@ public class MarketDataPollingService {
                     Thread.sleep(500);
                 }
                 if (isIgOutsideMarketHours(instrument)) {
-                    log.debug("Skipping {} — IG market closed (outside {}:00–{}:00 UTC)",
-                            instrument.getSymbol(), igMarketStartUtc, igMarketEndUtc);
+                    if (igSkipLoggedOnce.add(instrument.getSymbol())) {
+                        log.info("Skipping {} ({}) — IG market closed (outside {}:00–{}:00 UTC)",
+                                instrument.getName(), instrument.getSymbol(), igMarketStartUtc, igMarketEndUtc);
+                    }
                     continue;
+                } else {
+                    // Clear the once-per-session flag when market reopens
+                    igSkipLoggedOnce.remove(instrument.getSymbol());
                 }
                 updateInstrumentData(instrument);
                 signalDetectionService.analyzeInstrument(instrument);

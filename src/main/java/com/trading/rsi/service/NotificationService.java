@@ -113,6 +113,8 @@ public class NotificationService {
             case OVERBOUGHT -> "🔴";
             case PARTIAL_OVERSOLD -> "🟡";
             case PARTIAL_OVERBOUGHT -> "🟠";
+            case WATCH_OVERSOLD -> "👀";
+            case WATCH_OVERBOUGHT -> "👀";
         };
         
         String signalName = switch (signal.getSignalType()) {
@@ -120,6 +122,8 @@ public class NotificationService {
             case OVERBOUGHT -> "SELL SIGNAL";
             case PARTIAL_OVERSOLD -> "Partial Buy";
             case PARTIAL_OVERBOUGHT -> "Partial Sell";
+            case WATCH_OVERSOLD -> "WATCH Buy";
+            case WATCH_OVERBOUGHT -> "WATCH Sell";
         };
         
         return emoji + " " + signal.getInstrumentName() + " " + signalName;
@@ -148,6 +152,8 @@ public class NotificationService {
             case OVERBOUGHT -> "Consider SHORT/EXIT position";
             case PARTIAL_OVERSOLD -> "Watch for full alignment - potential LONG setup";
             case PARTIAL_OVERBOUGHT -> "Watch for full alignment - potential SHORT/EXIT";
+            case WATCH_OVERSOLD -> "1 TF oversold + others approaching — check chart for entry";
+            case WATCH_OVERBOUGHT -> "1 TF overbought + others approaching — check chart for exit";
         });
 
         boolean isPartial = signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD
@@ -233,12 +239,32 @@ public class NotificationService {
         return stopPercentCrypto;
     }
     
+    public void sendRawNotification(String title, String message, String priority, String tags) {
+        if (!ntfyEnabled) return;
+
+        WebClient client = webClientBuilder.baseUrl(ntfyServerUrl).build();
+        client.post()
+                .uri("/" + ntfyTopic)
+                .header("Title", title)
+                .header("Priority", priority)
+                .header("Tags", tags)
+                .bodyValue(message)
+                .retrieve()
+                .bodyToMono(String.class)
+                .doOnSuccess(r -> log.info("Notification sent: {}", title))
+                .doOnError(e -> log.error("Failed to send notification '{}': {}", title, e.getMessage()))
+                .onErrorResume(e -> Mono.empty())
+                .subscribe();
+    }
+
     private String getTagsForSignal(RsiSignal signal) {
         return switch (signal.getSignalType()) {
             case OVERSOLD -> "chart_with_upwards_trend,money_with_wings";
             case OVERBOUGHT -> "chart_with_downwards_trend,warning";
             case PARTIAL_OVERSOLD -> "eyes,chart_increasing";
             case PARTIAL_OVERBOUGHT -> "eyes,chart_decreasing";
+            case WATCH_OVERSOLD -> "mag,chart_increasing";
+            case WATCH_OVERBOUGHT -> "mag,chart_decreasing";
         };
     }
     

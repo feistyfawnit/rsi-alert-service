@@ -28,9 +28,13 @@ public class SignalDetectionService {
     private final MarketDataService marketDataService;
     private final ApplicationEventPublisher eventPublisher;
     private final SignalCooldownService cooldownService;
+    private final PartialSignalMonitorService partialSignalMonitorService;
     
     @Value("${rsi.period:14}")
     private int rsiPeriod;
+
+    @Value("${rsi.watch-proximity-threshold:40}")
+    private int watchProximityThreshold;
 
     private static final int MINIMUM_HISTORY = 28;
     private static final long[] BACKOFF_MINUTES = {2, 5, 15, 60};
@@ -86,6 +90,9 @@ public class SignalDetectionService {
         }
         
         detectSignals(instrument, rsiValues, currentPrice, timeframes.size());
+
+        // Update active partial monitoring on every poll cycle
+        partialSignalMonitorService.updatePartials(instrument.getSymbol(), rsiValues);
     }
     
     private void detectSignals(Instrument instrument, Map<String, BigDecimal> rsiValues, 
@@ -106,6 +113,19 @@ public class SignalDetectionService {
         SignalLog.SignalType signalType = null;
         int alignedCount = 0;
         
+        // Count how many TFs are within the proximity band (threshold < rsi < proximity)
+        int oversoldProximityCount = 0;
+        int overboughtProximityCount = 0;
+        for (BigDecimal rsi : rsiValues.values()) {
+            double val = rsi.doubleValue();
+            if (val >= instrument.getOversoldThreshold() && val < watchProximityThreshold) {
+                oversoldProximityCount++;
+            }
+            if (val <= instrument.getOverboughtThreshold() && val > (100 - watchProximityThreshold + instrument.getOverboughtThreshold())) {
+                overboughtProximityCount++;
+            }
+        }
+
         if (oversoldCount == totalTimeframes) {
             signalType = SignalLog.SignalType.OVERSOLD;
             alignedCount = oversoldCount;
@@ -117,6 +137,12 @@ public class SignalDetectionService {
             alignedCount = overboughtCount;
         } else if (overboughtCount >= totalTimeframes - 1 && overboughtCount > 0) {
             signalType = SignalLog.SignalType.PARTIAL_OVERBOUGHT;
+            alignedCount = overboughtCount;
+        } else if (oversoldCount >= 1 && oversoldProximityCount >= 1) {
+            signalType = SignalLog.SignalType.WATCH_OVERSOLD;
+            alignedCount = oversoldCount;
+        } else if (overboughtCount >= 1 && overboughtProximityCount >= 1) {
+            signalType = SignalLog.SignalType.WATCH_OVERBOUGHT;
             alignedCount = overboughtCount;
         }
         
@@ -137,6 +163,27 @@ public class SignalDetectionService {
             
             eventPublisher.publishEvent(new SignalEvent(this, signal));
             cooldownService.recordAlert(instrument.getSymbol(), signalType);
+
+            // Register active monitoring for PARTIAL signals so the lagging TF is tracked
+            if (signalType == SignalLog.SignalType.PARTIAL_OVERSOLD
+                    || signalType == SignalLog.SignalType.PARTIAL_OVERBOUGHT) {
+                boolean isOversold = signalType == SignalLog.SignalType.PARTIAL_OVERSOLD;
+                double threshold = isOversold
+                        ? instrument.getOversoldThreshold()
+                        : instrument.getOverboughtThreshold();
+                // Find the lagging timeframe (the one NOT past the threshold)
+                for (Map.Entry<String, BigDecimal> entry : rsiValues.entrySet()) {
+                    boolean aligned = isOversold
+                            ? entry.getValue().doubleValue() < threshold
+                            : entry.getValue().doubleValue() > threshold;
+                    if (!aligned) {
+                        partialSignalMonitorService.registerPartial(
+                                instrument.getSymbol(), instrument.getName(),
+                                signalType, entry.getKey(), entry.getValue(), threshold);
+                        break;
+                    }
+                }
+            }
         }
     }
     
@@ -144,7 +191,8 @@ public class SignalDetectionService {
         BigDecimal totalDeviation = BigDecimal.ZERO;
         
         for (BigDecimal rsi : rsiValues.values()) {
-            if (signalType == SignalLog.SignalType.OVERSOLD || signalType == SignalLog.SignalType.PARTIAL_OVERSOLD) {
+            if (signalType == SignalLog.SignalType.OVERSOLD || signalType == SignalLog.SignalType.PARTIAL_OVERSOLD
+                    || signalType == SignalLog.SignalType.WATCH_OVERSOLD) {
                 totalDeviation = totalDeviation.add(BigDecimal.valueOf(instrument.getOversoldThreshold()).subtract(rsi).abs());
             } else {
                 totalDeviation = totalDeviation.add(rsi.subtract(BigDecimal.valueOf(instrument.getOverboughtThreshold())).abs());

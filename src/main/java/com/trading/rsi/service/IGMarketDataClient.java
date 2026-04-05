@@ -29,6 +29,9 @@ public class IGMarketDataClient {
     private static final DateTimeFormatter IG_TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyy:MM:dd-HH:mm:ss");
 
+    private static final DateTimeFormatter IG_V3_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+
     public Mono<List<Candle>> fetchCandles(String epic, String timeframe, int limit) {
         if (!authService.isEnabled()) {
             return Mono.error(new IllegalStateException(
@@ -53,6 +56,46 @@ public class IGMarketDataClient {
                 .retryWhen(Retry.backoff(2, Duration.ofSeconds(3)))
                 .map(this::parseCandles)
                 .doOnError(e -> {
+                    if (e.getMessage() != null && e.getMessage().contains("403")) {
+                        authService.invalidateSession();
+                    }
+                });
+    }
+
+    public Mono<List<Candle>> fetchCandlesInRange(String epic, String timeframe, Instant from, Instant to) {
+        if (!authService.isEnabled()) {
+            return Mono.error(new IllegalStateException(
+                    "IG API not enabled — set market.ig.enabled=true and configure credentials"));
+        }
+
+        IGAuthService.IGSession igSession = authService.getSession();
+        if (igSession == null) {
+            return Mono.error(new IllegalStateException("IG session unavailable — check credentials"));
+        }
+
+        String resolution = convertTimeframeToIGResolution(timeframe);
+        String fromStr = LocalDateTime.ofInstant(from, ZoneOffset.UTC).format(IG_V3_DATE_FORMAT);
+        String toStr = LocalDateTime.ofInstant(to, ZoneOffset.UTC).format(IG_V3_DATE_FORMAT);
+
+        return authService.getClient().get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/prices/{epic}")
+                        .queryParam("resolution", resolution)
+                        .queryParam("from", fromStr)
+                        .queryParam("to", toStr)
+                        .queryParam("pageSize", "1000")
+                        .build(epic))
+                .header("X-IG-API-KEY", authService.getApiKey())
+                .header("CST", igSession.getCst())
+                .header("X-SECURITY-TOKEN", igSession.getSecurityToken())
+                .header("Version", "3")
+                .retrieve()
+                .bodyToMono(IGPriceResponse.class)
+                .retryWhen(Retry.backoff(2, Duration.ofSeconds(3)))
+                .map(this::parseCandles)
+                .doOnError(e -> {
+                    log.error("Error fetching candles in range for {} {} [{} to {}]: {}",
+                            epic, timeframe, fromStr, toStr, e.getMessage());
                     if (e.getMessage() != null && e.getMessage().contains("403")) {
                         authService.invalidateSession();
                     }
@@ -94,7 +137,11 @@ public class IGMarketDataClient {
         try {
             return LocalDateTime.parse(snapshotTime, IG_TIME_FORMAT).toInstant(ZoneOffset.UTC);
         } catch (Exception e) {
-            return Instant.now();
+            try {
+                return LocalDateTime.parse(snapshotTime, IG_V3_DATE_FORMAT).toInstant(ZoneOffset.UTC);
+            } catch (Exception e2) {
+                return Instant.now();
+            }
         }
     }
 
@@ -126,6 +173,7 @@ public class IGMarketDataClient {
     @Data
     private static class IGPrice {
         private String snapshotTime;
+        private String snapshotTimeUTC;
         private Object openPrice;
         private Object highPrice;
         private Object lowPrice;

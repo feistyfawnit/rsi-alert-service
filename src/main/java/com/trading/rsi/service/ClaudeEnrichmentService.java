@@ -64,8 +64,8 @@ public class ClaudeEnrichmentService {
 
     private String buildPrompt(RsiSignal signal) {
         String direction = switch (signal.getSignalType()) {
-            case OVERSOLD, PARTIAL_OVERSOLD -> "oversold (potential buy)";
-            case OVERBOUGHT, PARTIAL_OVERBOUGHT -> "overbought (potential sell/exit)";
+            case OVERSOLD, PARTIAL_OVERSOLD, WATCH_OVERSOLD -> "oversold (potential buy)";
+            case OVERBOUGHT, PARTIAL_OVERBOUGHT, WATCH_OVERBOUGHT -> "overbought (potential sell/exit)";
         };
         return String.format(
                 "RSI alert: %s (%s) is showing %s signal. " +

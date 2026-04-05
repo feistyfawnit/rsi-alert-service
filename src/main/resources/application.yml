@@ -30,6 +30,7 @@ rsi:
     interval-seconds: 60
 
   cooldown-minutes: 120
+  watch-proximity-threshold: ${WATCH_PROXIMITY_THRESHOLD:40}
 
   quiet-hours:
     enabled: true
@@ -39,6 +40,11 @@ rsi:
   market-hours:
     ig-start-utc: 8
     ig-end-utc: 22
+
+  partial-monitoring:
+    enabled: ${PARTIAL_MONITORING_ENABLED:true}
+    window-minutes: ${PARTIAL_MONITORING_WINDOW:120}
+    follow-up-interval-minutes: ${PARTIAL_MONITORING_INTERVAL:15}
 
   demo:
     account-balance: 10000
@@ -125,6 +131,11 @@ anomaly:
       - slug: will-the-us-impose-new-tariffs-in-the-next-30-days
         name: "US tariff announcement"
 
+archive:
+  enabled: ${ARCHIVE_ENABLED:true}
+  dir: ${ARCHIVE_DIR:./signal_archive}
+  retention-days: ${ARCHIVE_RETENTION_DAYS:90}
+
 springdoc:
   api-docs:
     path: /api-docs
@@ -175,7 +186,7 @@ watchlist:
       type: INDEX
       oversold-threshold: 30
       overbought-threshold: 70
-      timeframes: "15m,1h,4h"
+      timeframes: "15m,30m,1h"
     - symbol: IX.D.FTSE.DAILY.IP
       name: FTSE 100
       source: IG
@@ -183,7 +194,7 @@ watchlist:
       type: INDEX
       oversold-threshold: 30
       overbought-threshold: 70
-      timeframes: "15m,1h,4h"
+      timeframes: "15m,30m,1h"
     - symbol: IX.D.SPTRD.DAILY.IP
       name: S&P 500
       source: IG
@@ -191,7 +202,7 @@ watchlist:
       type: INDEX
       oversold-threshold: 30
       overbought-threshold: 70
-      timeframes: "15m,1h,4h"
+      timeframes: "15m,30m,1h"
     - symbol: CS.D.USCGC.TODAY.IP
       name: Gold
       source: IG
@@ -215,7 +226,7 @@ watchlist:
       type: INDEX
       oversold-threshold: 30
       overbought-threshold: 70
-      timeframes: "15m,1h,4h"
+      timeframes: "15m,30m,1h"
     - symbol: CS.D.SLVR.TODAY.IP
       name: Silver
       source: IG
