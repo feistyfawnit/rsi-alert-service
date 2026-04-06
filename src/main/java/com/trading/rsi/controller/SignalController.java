@@ -6,6 +6,7 @@ import com.trading.rsi.model.Candle;
 import com.trading.rsi.repository.InstrumentRepository;
 import com.trading.rsi.repository.SignalLogRepository;
 import com.trading.rsi.service.MarketDataService;
+import com.trading.rsi.service.NotificationService;
 import com.trading.rsi.service.PriceHistoryService;
 import com.trading.rsi.service.RsiCalculator;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class SignalController {
     private final PriceHistoryService priceHistoryService;
     private final RsiCalculator rsiCalculator;
     private final MarketDataService marketDataService;
+    private final NotificationService notificationService;
 
     @GetMapping
     public List<SignalLog> getAllSignals() {
@@ -233,6 +235,25 @@ public class SignalController {
         response.put("verdict", verdict);
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/no-trade-mode/on")
+    public ResponseEntity<Map<String, Object>> enableNoTradeMode() {
+        notificationService.enableNoTradeMode();
+        log.info("No-trade mode enabled via API");
+        return ResponseEntity.ok(Map.of("noTradeMode", true, "message", "PARTIAL and WATCH signals suppressed. FULL signals still active."));
+    }
+
+    @PostMapping("/no-trade-mode/off")
+    public ResponseEntity<Map<String, Object>> disableNoTradeMode() {
+        notificationService.disableNoTradeMode();
+        log.info("No-trade mode disabled via API");
+        return ResponseEntity.ok(Map.of("noTradeMode", false, "message", "All signals active."));
+    }
+
+    @GetMapping("/no-trade-mode")
+    public ResponseEntity<Map<String, Object>> getNoTradeModeStatus() {
+        return ResponseEntity.ok(Map.of("noTradeMode", notificationService.isNoTradeModeActive()));
     }
 
     private int candleMinutes(String timeframe) {

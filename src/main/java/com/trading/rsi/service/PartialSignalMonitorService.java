@@ -33,10 +33,10 @@ public class PartialSignalMonitorService {
     @Value("${rsi.partial-monitoring.enabled:true}")
     private boolean enabled;
 
-    @Value("${rsi.partial-monitoring.window-minutes:120}")
+    @Value("${rsi.partial-monitoring.window-minutes:60}")
     private int windowMinutes;
 
-    @Value("${rsi.partial-monitoring.follow-up-interval-minutes:15}")
+    @Value("${rsi.partial-monitoring.follow-up-interval-minutes:30}")
     private int followUpIntervalMinutes;
 
     private final Map<String, ActivePartial> activePartials = new ConcurrentHashMap<>();
@@ -68,6 +68,7 @@ public class PartialSignalMonitorService {
                 .laggingTimeframe(laggingTimeframe)
                 .threshold(threshold)
                 .initialGap(gap)
+                .lastKnownGap(gap.doubleValue())
                 .startTime(Instant.now())
                 .lastFollowUp(Instant.now())
                 .build());
@@ -128,26 +129,35 @@ public class PartialSignalMonitorService {
             return;
         }
 
-        // Periodic follow-up
+        // Periodic follow-up — only send when gap is actively closing
         double currentGap = isOversold
                 ? laggingRsi.doubleValue() - partial.getThreshold()
                 : partial.getThreshold() - laggingRsi.doubleValue();
 
         Duration sinceLastFollowUp = Duration.between(partial.getLastFollowUp(), Instant.now());
         if (sinceLastFollowUp.toMinutes() >= followUpIntervalMinutes) {
-            String direction = currentGap < partial.getInitialGap().doubleValue() ? "closing" : "widening";
+            partial.setLastFollowUp(Instant.now());
+            boolean gapClosing = currentGap < partial.getLastKnownGap();
+            partial.setLastKnownGap(currentGap);
+            if (!gapClosing) {
+                log.debug("Partial follow-up for {} skipped — gap widening/static ({} pts)", partial.getSymbol(), String.format("%.1f", currentGap));
+                return;
+            }
+            if (notificationService.isNoTradeModeActive()) {
+                log.debug("No-trade mode active — skipping partial follow-up for {}", partial.getSymbol());
+                return;
+            }
             long minutesActive = Duration.between(partial.getStartTime(), Instant.now()).toMinutes();
             long minutesRemaining = windowMinutes - minutesActive;
 
             notificationService.sendRawNotification(
-                    partial.getInstrumentName() + " Partial Update",
+                    partial.getInstrumentName() + " Partial Closing In",
                     partial.getLaggingTimeframe() + " RSI: "
                             + laggingRsi.setScale(2, RoundingMode.HALF_UP)
                             + " -> needs " + (isOversold ? "<" : ">") + (int) partial.getThreshold()
-                            + " (" + String.format("%.1f", currentGap) + " pts away, " + direction + ")\n"
+                            + " (" + String.format("%.1f", currentGap) + " pts away, closing)\n"
                             + minutesActive + " min elapsed, " + minutesRemaining + " min remaining",
                     "default", "eyes");
-            partial.setLastFollowUp(Instant.now());
         }
     }
 
@@ -168,6 +178,7 @@ public class PartialSignalMonitorService {
         private String laggingTimeframe;
         private double threshold;
         private BigDecimal initialGap;
+        private double lastKnownGap;
         private Instant startTime;
         private Instant lastFollowUp;
     }

@@ -44,8 +44,8 @@ rsi:
 
   partial-monitoring:
     enabled: ${PARTIAL_MONITORING_ENABLED:true}
-    window-minutes: ${PARTIAL_MONITORING_WINDOW:120}
-    follow-up-interval-minutes: ${PARTIAL_MONITORING_INTERVAL:15}
+    window-minutes: ${PARTIAL_MONITORING_WINDOW:60}
+    follow-up-interval-minutes: ${PARTIAL_MONITORING_INTERVAL:30}
 
   demo:
     account-balance: 10000

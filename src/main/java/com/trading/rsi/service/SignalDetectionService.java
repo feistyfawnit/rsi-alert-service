@@ -123,7 +123,7 @@ public class SignalDetectionService {
             if (val >= instrument.getOversoldThreshold() && val < watchProximityThreshold) {
                 oversoldProximityCount++;
             }
-            if (val <= instrument.getOverboughtThreshold() && val > (100 - watchProximityThreshold + instrument.getOverboughtThreshold())) {
+            if (val <= instrument.getOverboughtThreshold() && val > (100 - watchProximityThreshold)) {
                 overboughtProximityCount++;
             }
         }

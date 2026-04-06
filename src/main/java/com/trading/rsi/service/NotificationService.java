@@ -18,6 +18,7 @@ import java.time.DayOfWeek;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @Slf4j
@@ -38,6 +39,8 @@ public class NotificationService {
     
     @Value("${notifications.ntfy.priority:high}")
     private String ntfyPriority;
+
+    private final AtomicBoolean noTradeModeActive = new AtomicBoolean(false);
     
     @Value("${rsi.quiet-hours.enabled:true}")
     private boolean quietHoursEnabled;
@@ -79,6 +82,10 @@ public class NotificationService {
         
         RsiSignal signal = event.getSignal();
         boolean isFullSignal = signal.getTimeframesAligned() >= signal.getTotalTimeframes();
+        if (!isFullSignal && noTradeModeActive.get()) {
+            log.debug("No-trade mode active, suppressing partial/watch signal for {}", signal.getSymbol());
+            return;
+        }
         if (!isFullSignal && isQuietHours()) {
             log.debug("Quiet hours active, suppressing partial signal for {}", signal.getSymbol());
             return;
@@ -95,10 +102,32 @@ public class NotificationService {
         }
         
         String aiContext = claudeEnrichmentService.enrichSignal(signal);
-        sendNtfyNotification(signal, aiContext);
+        sendNtfyNotification(signal, aiContext, priorityForSignal(signal.getSignalType()));
     }
     
-    private void sendNtfyNotification(RsiSignal signal, String aiContext) {
+    public void enableNoTradeMode() {
+        noTradeModeActive.set(true);
+        log.info("No-trade mode ENABLED — PARTIAL and WATCH signals suppressed");
+    }
+
+    public void disableNoTradeMode() {
+        noTradeModeActive.set(false);
+        log.info("No-trade mode DISABLED — all signals active");
+    }
+
+    public boolean isNoTradeModeActive() {
+        return noTradeModeActive.get();
+    }
+
+    private String priorityForSignal(SignalLog.SignalType signalType) {
+        return switch (signalType) {
+            case OVERSOLD, OVERBOUGHT -> "urgent";
+            case PARTIAL_OVERSOLD, PARTIAL_OVERBOUGHT -> "default";
+            case WATCH_OVERSOLD, WATCH_OVERBOUGHT -> "low";
+        };
+    }
+
+    private void sendNtfyNotification(RsiSignal signal, String aiContext, String priority) {
         String title = buildNotificationTitle(signal);
         String message = buildNotificationMessage(signal, aiContext);
         
@@ -107,7 +136,7 @@ public class NotificationService {
         client.post()
                 .uri("/" + ntfyTopic)
                 .header("Title", title)
-                .header("Priority", ntfyPriority)
+                .header("Priority", priority)
                 .header("Tags", getTagsForSignal(signal))
                 .bodyValue(message)
                 .retrieve()
