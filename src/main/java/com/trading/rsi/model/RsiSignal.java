@@ -22,4 +22,5 @@ public class RsiSignal {
     private int timeframesAligned;
     private int totalTimeframes;
     private BigDecimal signalStrength;
+    private Candle triggerCandle;
 }

@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 public class HistoryArchivalService {
 
     private static final String CSV_HEADER =
-            "id,symbol,instrument_name,signal_type,current_price,rsi_15m,rsi_1h,rsi_4h," +
+            "id,symbol,instrument_name,signal_type,current_price,rsi_1m,rsi_5m,rsi_15m,rsi_30m,rsi_1h,rsi_4h," +
             "timeframes_aligned,signal_strength,created_at";
 
     private final SignalLogRepository signalLogRepository;
@@ -123,7 +123,10 @@ public class HistoryArchivalService {
                 csvEscape(s.getInstrumentName()),
                 csvEscape(String.valueOf(s.getSignalType())),
                 nullOrValue(s.getCurrentPrice()),
+                nullOrValue(s.getRsi1m()),
+                nullOrValue(s.getRsi5m()),
                 nullOrValue(s.getRsi15m()),
+                nullOrValue(s.getRsi30m()),
                 nullOrValue(s.getRsi1h()),
                 nullOrValue(s.getRsi4h()),
                 nullOrValue(s.getTimeframesAligned()),

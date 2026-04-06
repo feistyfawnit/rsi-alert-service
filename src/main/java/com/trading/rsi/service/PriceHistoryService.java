@@ -18,8 +18,11 @@ public class PriceHistoryService {
     private static final int MAX_HISTORY_SIZE = 50;
     
     private final Map<String, LinkedList<BigDecimal>> priceHistory = new ConcurrentHashMap<>();
+    private final Map<String, Candle> latestCandleByKey = new ConcurrentHashMap<>();
+    private final Map<String, BigDecimal> latestPriceBySymbol = new ConcurrentHashMap<>();
     
     public void updatePriceHistory(String key, Candle candle) {
+        latestCandleByKey.put(key, candle);
         updatePriceHistory(key, candle.getClose());
     }
     
@@ -31,6 +34,8 @@ public class PriceHistoryService {
                 history.removeFirst();
             }
         }
+        String symbol = key.contains(":") ? key.split(":")[0] : key;
+        latestPriceBySymbol.put(symbol, closePrice);
     }
     
     public List<BigDecimal> getPriceHistory(String key) {
@@ -49,8 +54,17 @@ public class PriceHistoryService {
         }
     }
     
+    public Candle getLatestCandle(String key) {
+        return latestCandleByKey.get(key);
+    }
+
+    public BigDecimal getLatestPrice(String symbol) {
+        return latestPriceBySymbol.get(symbol);
+    }
+
     public void clearHistory(String key) {
         priceHistory.remove(key);
+        latestCandleByKey.remove(key);
     }
     
     public String buildKey(String symbol, String timeframe) {

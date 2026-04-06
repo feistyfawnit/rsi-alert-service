@@ -36,6 +36,7 @@ rsi:
     enabled: true
     start-hour: 22
     end-hour: 8
+    suppress-partials-on-weekends: true
 
   market-hours:
     ig-start-utc: 8

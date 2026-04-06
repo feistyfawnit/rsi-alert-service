@@ -46,6 +46,7 @@ public class SignalDetectionService {
         List<String> timeframes = Arrays.asList(instrument.getTimeframes().split(","));
         Map<String, BigDecimal> rsiValues = new HashMap<>();
         BigDecimal currentPrice = null;
+        Candle triggerCandle = null;
         
         for (String timeframe : timeframes) {
             String key = priceHistoryService.buildKey(instrument.getSymbol(), timeframe.trim());
@@ -72,6 +73,7 @@ public class SignalDetectionService {
             
             if (currentPrice == null) {
                 currentPrice = history.get(history.size() - 1);
+                triggerCandle = priceHistoryService.getLatestCandle(key);
             }
             
             BigDecimal rsi = rsiCalculator.calculateRsi(history, rsiPeriod);
@@ -89,14 +91,14 @@ public class SignalDetectionService {
             return;
         }
         
-        detectSignals(instrument, rsiValues, currentPrice, timeframes.size());
+        detectSignals(instrument, rsiValues, currentPrice, timeframes.size(), triggerCandle);
 
         // Update active partial monitoring on every poll cycle
         partialSignalMonitorService.updatePartials(instrument.getSymbol(), rsiValues);
     }
     
-    private void detectSignals(Instrument instrument, Map<String, BigDecimal> rsiValues, 
-                               BigDecimal currentPrice, int totalTimeframes) {
+    private void detectSignals(Instrument instrument, Map<String, BigDecimal> rsiValues,
+                               BigDecimal currentPrice, int totalTimeframes, Candle triggerCandle) {
         
         int oversoldCount = 0;
         int overboughtCount = 0;
@@ -156,6 +158,7 @@ public class SignalDetectionService {
                     .timeframesAligned(alignedCount)
                     .totalTimeframes(totalTimeframes)
                     .signalStrength(calculateSignalStrength(rsiValues, signalType, instrument))
+                    .triggerCandle(triggerCandle)
                     .build();
             
             log.info("Signal detected: {} {} - {} timeframes aligned, RSI values: {}", 

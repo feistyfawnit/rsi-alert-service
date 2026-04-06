@@ -14,6 +14,7 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Map;
@@ -47,6 +48,9 @@ public class NotificationService {
     @Value("${rsi.quiet-hours.end-hour:8}")
     private int quietHoursEnd;
 
+    @Value("${rsi.quiet-hours.suppress-partials-on-weekends:true}")
+    private boolean suppressPartialsOnWeekends;
+
     @Value("${rsi.demo.account-balance:10000}")
     private int demoAccountBalance;
 
@@ -79,8 +83,15 @@ public class NotificationService {
             log.debug("Quiet hours active, suppressing partial signal for {}", signal.getSymbol());
             return;
         }
+        if (!isFullSignal && suppressPartialsOnWeekends && isWeekend()) {
+            log.debug("Weekend suppression active, skipping partial/watch signal for {}", signal.getSymbol());
+            return;
+        }
         if (isFullSignal && isQuietHours()) {
             log.info("Quiet hours but FULL signal — sending for {}", signal.getSymbol());
+        }
+        if (isFullSignal && isWeekend()) {
+            log.info("Weekend but FULL signal — sending for {}", signal.getSymbol());
         }
         
         String aiContext = claudeEnrichmentService.enrichSignal(signal);
@@ -222,13 +233,13 @@ public class NotificationService {
         sb.append("Limit: ").append(limitPts).append(" pts away (2:1 — profit ").append(accountCurrency)
           .append(" ").append(riskAmount.multiply(java.math.BigDecimal.valueOf(2)).toPlainString()).append(")\n");
         if (isCrypto) {
-            sb.append("⚠️ Crypto price is USD — recalc stop: IG entry x ").append(stopPct).append("%\n");
+            sb.append("[Binance price — adjust pts if IG entry differs: stop = IG entry × ").append(stopPct).append("%]\n");
         }
         if (isPartial) {
             sb.append("⏳ Wait for ").append(signal.getTotalTimeframes()).append("/")
               .append(signal.getTotalTimeframes()).append(" TF alignment before entering");
         } else {
-            sb.append("✅ Confirm on chart, then place on IG demo");
+            sb.append("✅ Confirm chart, then place on IG demo");
         }
         return sb.toString();
     }
@@ -278,5 +289,10 @@ public class NotificationService {
         return quietHoursStart > quietHoursEnd
                 ? currentHour >= quietHoursStart || currentHour < quietHoursEnd
                 : currentHour >= quietHoursStart && currentHour < quietHoursEnd;
+    }
+
+    private boolean isWeekend() {
+        DayOfWeek day = ZonedDateTime.now(ZoneOffset.UTC).getDayOfWeek();
+        return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
     }
 }
