@@ -6,15 +6,17 @@ A production-grade Spring Boot service that monitors financial instruments for R
 
 ## Features
 
-- ✅ Real-time RSI calculation across multiple timeframes (15m, 1h, 4h)
-- ✅ Multi-instrument support (crypto, indices, commodities, FX)
-- ✅ Instant push notifications via ntfy.sh
-- ✅ Free-tier market data (Binance for crypto, Finnhub for others)
-- ✅ Configurable oversold/overbought thresholds
-- ✅ Signal cooldown to prevent spam
-- ✅ Quiet hours configuration
-- ✅ Full signal history logging
-- ✅ REST API for watchlist management
+- ✅ Real-time RSI calculation across multiple timeframes (15m, 30m, 1h, 4h — configurable per instrument)
+- ✅ Multi-instrument support (crypto via Binance, indices/commodities via IG API)
+- ✅ Three-tier signal hierarchy: FULL → PARTIAL → WATCH
+- ✅ Instant push notifications via ntfy.sh (per-signal-type priority levels)
+- ✅ Partial signal monitoring with lagging-TF follow-ups
+- ✅ No-trade mode toggle for bank holidays / downtime
+- ✅ Volume anomaly detection (σ-based) + Polymarket geopolitical odds monitor
+- ✅ Claude AI signal enrichment (optional)
+- ✅ Signal CSV archival with outcome backfill (1h/4h/24h price tracking)
+- ✅ REST API for instruments, signals, retrospective analysis
+- ✅ Auto-trading scaffolded (Phase 4 — hard-disabled, requires demo validation)
 
 ## Tech Stack
 
@@ -65,49 +67,17 @@ The app will be available at `http://localhost:8080`
 
 ## API Endpoints
 
-### Instruments Management
+Full reference: **[docs/api.md](docs/api.md)**
+
+Key endpoints:
 
 ```bash
-# Get all instruments
-GET /api/instruments
-
-# Get enabled instruments only
-GET /api/instruments/enabled
-
-# Create new instrument
-POST /api/instruments
-{
-  "symbol": "ETHUSDT",
-  "name": "Ethereum",
-  "source": "BINANCE",
-  "type": "CRYPTO",
-  "enabled": true,
-  "oversoldThreshold": 30,
-  "overboughtThreshold": 70,
-  "timeframes": "1m,5m,1h,4h"
-}
-
-# Update instrument
-PUT /api/instruments/{id}
-
-# Toggle enabled/disabled
-PATCH /api/instruments/{id}/toggle
-
-# Delete instrument
-DELETE /api/instruments/{id}
-```
-
-### Signal History
-
-```bash
-# Get all signals
-GET /api/signals
-
-# Get signals for specific instrument
-GET /api/signals/symbol/SOLUSDT
-
-# Get signals from last N hours
-GET /api/signals/recent?hours=24
+GET  /api/instruments/enabled          # Active instruments
+GET  /api/signals/recent?hours=24      # Recent signals
+GET  /api/signals/rsi-snapshot          # Live RSI values
+POST /api/signals/no-trade-mode/on     # Suppress PARTIAL/WATCH
+POST /api/trading/kill-switch/activate  # Emergency stop
+POST /api/test/notify                   # Fire test notification
 ```
 
 ## Pre-Configured Instruments
@@ -122,40 +92,6 @@ The app comes pre-configured with:
 
 All crypto data is FREE via Binance API (no API key required). Indices/commodities require an IG account.
 
-## Adding More Instruments
-
-### For Crypto (FREE - Binance)
-
-```bash
-curl -X POST http://localhost:8080/api/instruments \
-  -H "Content-Type: application/json" \
-  -d '{
-    "symbol": "BNBUSDT",
-    "name": "Binance Coin",
-    "source": "BINANCE",
-    "type": "CRYPTO",
-    "enabled": true,
-    "timeframes": "15m,1h,4h"
-  }'
-```
-
-### For Indices/Commodities (IG API — free with account)
-
-Requires `IG_ENABLED=true` and IG credentials in `.env`. Find epic codes at https://labs.ig.com/sample-apps/api-companion/index.html
-
-```bash
-curl -X POST http://localhost:8080/api/instruments \
-  -H "Content-Type: application/json" \
-  -d '{
-    "symbol": "IX.D.DAX.DAILY.IP",
-    "name": "DAX 40",
-    "source": "IG",
-    "type": "INDEX",
-    "enabled": true,
-    "timeframes": "15m,1h,4h"
-  }'
-```
-
 ## Configuration
 
 Edit `src/main/resources/application.yml` or use environment variables:
@@ -165,115 +101,45 @@ rsi:
   period: 14                    # RSI calculation period
   oversold-threshold: 30        # Default oversold threshold
   overbought-threshold: 70      # Default overbought threshold
-  
   polling:
     interval-seconds: 60        # How often to check for signals
-    
   quiet-hours:
     enabled: true
     start-hour: 22              # 10 PM UTC (11 PM BST)
     end-hour: 8                 # 8 AM UTC (9 AM BST) — full signals bypass quiet hours
 ```
 
+See [docs/api.md](docs/api.md) for adding instruments via the REST API.
+
 ## Signal Types
 
-- **OVERSOLD (🟢)**: ALL timeframes RSI < 30 → **BUY SIGNAL**
-- **OVERBOUGHT (🔴)**: ALL timeframes RSI > 70 → **SELL SIGNAL**  
-- **PARTIAL_OVERSOLD (🟡)**: 2 of 3 timeframes oversold → Early warning (suppressed during quiet hours)
-- **PARTIAL_OVERBOUGHT (🟠)**: 2 of 3 timeframes overbought → Early warning (suppressed during quiet hours)
-
-## Deployment to Railway (Optional - $5/month)
-
-### 1. Create Railway Account
-- Visit https://railway.app
-- Connect your GitHub account
-
-### 2. Create New Project
-- Click "New Project" → "Deploy from GitHub repo"
-- Select `rsi-alert-service` repository
-
-### 3. Add PostgreSQL
-- Click "New" → "Database" → "Add PostgreSQL"
-- Railway automatically sets DATABASE_URL environment variable
-
-### 4. Configure Environment Variables
-- Go to project → Variables tab
-- Add:
-  - `FINNHUB_API_KEY` (if using Finnhub)
-  - `NTFY_TOPIC` (your custom topic name)
-
-### 5. Deploy
-- Railway auto-deploys on every git push to main
-- Your app will be live at: `https://your-app.up.railway.app`
-
-## Cost Breakdown
-
-| Service | Cost | Notes |
-|---------|------|-------|
-| **Binance API** | FREE | All crypto data, no key required |
-| **Finnhub API** | FREE | 60 calls/min free tier. Indices/stocks require **paid plan** |
-| **ntfy.sh** | FREE | Unlimited push notifications |
-| **Railway Hosting** | $0-5/month | Free tier: 500 hrs/mo, Hobby: $5 unlimited |
-| **PostgreSQL** | Included | Comes with Railway plan |
-| **Total** | **$0-5/month** | Fits your budget constraint |
-
-## Monitoring
-
-```bash
-# Check if app is running
-curl http://localhost:8080/actuator/health
-
-# View recent signals
-curl http://localhost:8080/api/signals/recent?hours=1
-
-# View all enabled instruments
-curl http://localhost:8080/api/instruments/enabled
-```
+| Priority | Signal | Condition | ntfy priority |
+|---|---|---|---|
+| 1 | 🟢 OVERSOLD / 🔴 OVERBOUGHT | All TFs aligned | urgent (5) — bypasses DND |
+| 2 | 🟡 PARTIAL | All but 1 TF aligned | default (3) |
+| 3 | 👀 WATCH | 1 TF crossed + others approaching | low (2) |
 
 ## Troubleshooting
 
-### No signals appearing?
-1. Check logs: `docker-compose logs -f app`
-2. Verify instruments are enabled: `GET /api/instruments/enabled`
-3. Confirm market is open and prices are moving
-4. RSI needs time to build history (~30 minutes after first start)
+See [QUICKSTART.md](QUICKSTART.md) for detailed troubleshooting. Quick checks:
 
-### Not receiving notifications?
-1. Verify ntfy.sh subscription topic matches your `NTFY_TOPIC`
-2. Check quiet hours aren't active (2 AM - 6 AM by default)
-3. Check signal cooldown (15 minutes between duplicate alerts)
-
-### Database connection errors?
 ```bash
-# Restart PostgreSQL
-docker-compose restart postgres
-
-# Check PostgreSQL is healthy
-docker-compose ps
+curl http://localhost:8080/actuator/health           # App running?
+curl http://localhost:8080/api/instruments/enabled     # Instruments active?
+curl http://localhost:8080/api/signals/recent?hours=1  # Any signals?
+docker-compose logs -f app                             # Check logs
 ```
 
-## Phase Status
+## Documentation
 
-- **Phase 1** ✅ — Core RSI alerts, Binance crypto, ntfy.sh notifications
-- **Phase 2** ✅ — IG API integration, DAX/FTSE/Gold/Oil/S&P 500 via IG
-- **Phase 3** ✅ — Claude AI enrichment built, enable with `CLAUDE_ENABLED=true` + API key
-- **Phase 4** ✅ — Auto-execution scaffolded, **hard-disabled** (`TRADING_AUTO_EXECUTION_ENABLED=false`) — do not enable without 3+ months paper trading
-- **Phase 5** ✅ — Volume spike detector live; Polymarket monitor live (geopolitical odds shifts)
+| Doc | Purpose |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | System design, components, data flow |
+| [docs/api.md](docs/api.md) | Full REST API reference |
+| [QUICKSTART.md](QUICKSTART.md) | Setup, demo, troubleshooting |
 
-## Important Notes
-
-⚠️ **This tool is for PERSONAL USE ONLY**  
-⚠️ **Not financial advice - use at your own risk**  
-⚠️ **MiFID II compliance: no public distribution or commercialization**  
-⚠️ **Always verify signals manually before trading**
-
-## Support
-
-For issues or questions, check logs first:
-```bash
-docker-compose logs -f app
-```
+⚠️ **Personal use only — not financial advice — MiFID II: no public distribution**
 
 ---
 
-*March 2026*
+*April 2026*

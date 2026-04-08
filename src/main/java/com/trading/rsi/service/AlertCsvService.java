@@ -20,6 +20,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,14 +38,15 @@ public class AlertCsvService {
             "current_price,rsi_1m,rsi_5m,rsi_15m,rsi_30m,rsi_1h,rsi_4h," +
             "timeframes_aligned,total_timeframes,signal_strength," +
             "candle_time,candle_open,candle_high,candle_low,candle_close,candle_volume," +
-            "price_1h_later,price_4h_later,price_24h_later";
+            "price_1h_later,price_4h_later,price_24h_later," +
+            "hour_utc,day_of_week";
 
     private static final int COL_SYMBOL      = 1;
     private static final int COL_SIGNAL_TIME = 4;
     private static final int COL_PRICE_1H    = 21;
     private static final int COL_PRICE_4H    = 22;
     private static final int COL_PRICE_24H   = 23;
-    private static final int TOTAL_COLUMNS   = 24;
+    private static final int MIN_COLUMNS_FOR_BACKFILL = 24; // price cols are 21-23
 
     private static final DateTimeFormatter MONTH_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM").withZone(ZoneOffset.UTC);
@@ -169,7 +171,7 @@ public class AlertCsvService {
                     continue;
                 }
                 String[] fields = line.split(",", -1);
-                if (fields.length < TOTAL_COLUMNS) {
+                if (fields.length < MIN_COLUMNS_FOR_BACKFILL) {
                     updated.add(line);
                     continue;
                 }
@@ -233,6 +235,7 @@ public class AlertCsvService {
         Map<String, BigDecimal> rsi = signal.getRsiValues();
         Candle c = signal.getTriggerCandle();
 
+        ZonedDateTime signalUtc = signalTime.atZone(ZoneOffset.UTC);
         return String.join(",",
                 UUID.randomUUID().toString(),
                 csvEscape(signal.getSymbol()),
@@ -257,7 +260,9 @@ public class AlertCsvService {
                 c != null ? nullOrValue(c.getVolume())    : "",
                 "",
                 "",
-                ""
+                "",
+                String.valueOf(signalUtc.getHour()),
+                signalUtc.getDayOfWeek().name()
         );
     }
 

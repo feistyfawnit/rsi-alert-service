@@ -18,6 +18,8 @@ import java.time.DayOfWeek;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
@@ -41,6 +43,7 @@ public class NotificationService {
     private String ntfyPriority;
 
     private final AtomicBoolean noTradeModeActive = new AtomicBoolean(false);
+    private final Set<String> mutedSymbols = ConcurrentHashMap.newKeySet();
     
     @Value("${rsi.quiet-hours.enabled:true}")
     private boolean quietHoursEnabled;
@@ -82,6 +85,10 @@ public class NotificationService {
         
         RsiSignal signal = event.getSignal();
         boolean isFullSignal = signal.getTimeframesAligned() >= signal.getTotalTimeframes();
+        if (mutedSymbols.contains(signal.getSymbol())) {
+            log.debug("Symbol {} is muted, suppressing all signals", signal.getSymbol());
+            return;
+        }
         if (!isFullSignal && noTradeModeActive.get()) {
             log.debug("No-trade mode active, suppressing partial/watch signal for {}", signal.getSymbol());
             return;
@@ -117,6 +124,20 @@ public class NotificationService {
 
     public boolean isNoTradeModeActive() {
         return noTradeModeActive.get();
+    }
+
+    public void muteSymbol(String symbol) {
+        mutedSymbols.add(symbol.toUpperCase());
+        log.info("Symbol {} muted — all alerts suppressed", symbol);
+    }
+
+    public void unmuteSymbol(String symbol) {
+        mutedSymbols.remove(symbol.toUpperCase());
+        log.info("Symbol {} unmuted — alerts active", symbol);
+    }
+
+    public Set<String> getMutedSymbols() {
+        return Set.copyOf(mutedSymbols);
     }
 
     private String priorityForSignal(SignalLog.SignalType signalType) {

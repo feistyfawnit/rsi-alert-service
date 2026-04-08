@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *  2. Fires an urgent "FULL ALIGNMENT" alert if the lagging TF crosses the threshold
  *  3. Sends an "expired" notification when the monitoring window closes
  *
- * This addresses the 4h lag problem documented in signal-strategy-notes.md —
+ * This addresses the 4h lag problem documented in PROJECT_LOG.md —
  * indices like DAX can V-recover before the 4h RSI catches up.
  */
 @Service
@@ -92,6 +92,11 @@ public class PartialSignalMonitorService {
         if (Instant.now().isAfter(partial.getStartTime().plus(Duration.ofMinutes(windowMinutes)))) {
             BigDecimal currentRsi = rsiValues.get(partial.getLaggingTimeframe());
             log.info("Active partial monitoring EXPIRED for {} after {} min", symbol, windowMinutes);
+            activePartials.remove(symbol);
+            if (notificationService.getMutedSymbols().contains(symbol)) {
+                log.debug("Symbol {} is muted — skipping expiry notification", symbol);
+                return;
+            }
             notificationService.sendRawNotification(
                     partial.getInstrumentName() + " Partial Expired",
                     partial.getLaggingTimeframe() + " RSI did not align within " + windowMinutes + " min window.\n"
@@ -99,7 +104,6 @@ public class PartialSignalMonitorService {
                             + (currentRsi != null ? currentRsi.setScale(2, RoundingMode.HALF_UP) : "unknown")
                             + " (threshold: " + (int) partial.getThreshold() + ")",
                     "low", "hourglass_not_done");
-            activePartials.remove(symbol);
             return;
         }
 
@@ -115,6 +119,11 @@ public class PartialSignalMonitorService {
             log.info("PARTIAL -> FULL CONVERSION for {} — {} RSI {} crossed threshold {}!",
                     partial.getInstrumentName(), partial.getLaggingTimeframe(),
                     laggingRsi.setScale(2, RoundingMode.HALF_UP), (int) partial.getThreshold());
+            activePartials.remove(symbol);
+            if (notificationService.getMutedSymbols().contains(symbol)) {
+                log.info("Symbol {} is muted — FULL ALIGNMENT occurred but suppressed", symbol);
+                return;
+            }
             notificationService.sendRawNotification(
                     partial.getInstrumentName() + " FULL ALIGNMENT!",
                     partial.getLaggingTimeframe() + " RSI now "
@@ -125,7 +134,6 @@ public class PartialSignalMonitorService {
                     "urgent",
                     isOversold ? "chart_with_upwards_trend,rotating_light"
                                : "chart_with_downwards_trend,rotating_light");
-            activePartials.remove(symbol);
             return;
         }
 
@@ -141,6 +149,10 @@ public class PartialSignalMonitorService {
             partial.setLastKnownGap(currentGap);
             if (!gapClosing) {
                 log.debug("Partial follow-up for {} skipped — gap widening/static ({} pts)", partial.getSymbol(), String.format("%.1f", currentGap));
+                return;
+            }
+            if (notificationService.getMutedSymbols().contains(partial.getSymbol())) {
+                log.debug("Symbol {} is muted — skipping partial follow-up", partial.getSymbol());
                 return;
             }
             if (notificationService.isNoTradeModeActive()) {

@@ -237,6 +237,23 @@ public class SignalController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/mute/{symbol}")
+    public ResponseEntity<Map<String, Object>> muteSymbol(@PathVariable String symbol) {
+        notificationService.muteSymbol(symbol);
+        return ResponseEntity.ok(Map.of("muted", symbol.toUpperCase(), "message", "All alerts suppressed for " + symbol.toUpperCase()));
+    }
+
+    @PostMapping("/unmute/{symbol}")
+    public ResponseEntity<Map<String, Object>> unmuteSymbol(@PathVariable String symbol) {
+        notificationService.unmuteSymbol(symbol);
+        return ResponseEntity.ok(Map.of("unmuted", symbol.toUpperCase(), "message", "Alerts re-enabled for " + symbol.toUpperCase()));
+    }
+
+    @GetMapping("/muted")
+    public ResponseEntity<Map<String, Object>> getMutedSymbols() {
+        return ResponseEntity.ok(Map.of("muted", notificationService.getMutedSymbols()));
+    }
+
     @PostMapping("/no-trade-mode/on")
     public ResponseEntity<Map<String, Object>> enableNoTradeMode() {
         notificationService.enableNoTradeMode();

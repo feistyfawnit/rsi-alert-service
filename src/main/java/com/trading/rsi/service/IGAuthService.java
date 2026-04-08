@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Service
@@ -22,6 +23,8 @@ public class IGAuthService {
     private final boolean enabled;
 
     private final AtomicReference<IGSession> session = new AtomicReference<>();
+    private volatile Instant lastAuthFailure = null;
+    private static final long AUTH_BACKOFF_SECONDS = 300; // 5 minutes between failed auth attempts
 
     public IGAuthService(
             @Value("${market.ig.base-url:https://demo-api.ig.com/gateway/deal}") String baseUrl,
@@ -62,6 +65,13 @@ public class IGAuthService {
 
     public IGSession getSession() {
         if (session.get() == null) {
+            if (lastAuthFailure != null &&
+                    Instant.now().isBefore(lastAuthFailure.plusSeconds(AUTH_BACKOFF_SECONDS))) {
+                log.debug("IG auth on backoff — last failure {}s ago, retry in {}s",
+                        java.time.Duration.between(lastAuthFailure, Instant.now()).toSeconds(),
+                        AUTH_BACKOFF_SECONDS - java.time.Duration.between(lastAuthFailure, Instant.now()).toSeconds());
+                return null;
+            }
             authenticate();
         }
         return session.get();
@@ -99,8 +109,13 @@ public class IGAuthService {
                     log.error("IG auth response missing CST or X-SECURITY-TOKEN headers");
                 }
             }
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException wcre) {
+            lastAuthFailure = Instant.now();
+            log.error("IG authentication failed: {} body=[{}] — retrying in {} min",
+                    wcre.getMessage(), wcre.getResponseBodyAsString(), AUTH_BACKOFF_SECONDS / 60);
         } catch (Exception e) {
-            log.error("IG authentication failed: {}", e.getMessage());
+            lastAuthFailure = Instant.now();
+            log.error("IG authentication failed: {} — retrying in {} min", e.getMessage(), AUTH_BACKOFF_SECONDS / 60);
         }
     }
 

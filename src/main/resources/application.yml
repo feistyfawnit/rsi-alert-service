@@ -27,10 +27,12 @@ rsi:
   overbought-threshold: 70
   
   polling:
-    interval-seconds: 60
+    interval-seconds: 300
+    ig-interval-seconds: 900
 
   cooldown-minutes: 120
   watch-proximity-threshold: ${WATCH_PROXIMITY_THRESHOLD:40}
+  partial-require-fast-tf-aligned: ${PARTIAL_REQUIRE_FAST_TF:true}
 
   quiet-hours:
     enabled: true
@@ -39,8 +41,9 @@ rsi:
     suppress-partials-on-weekends: true
 
   market-hours:
-    ig-start-utc: 8
+    ig-start-utc: 6
     ig-end-utc: 22
+    ig-sunday-start-utc: 22
 
   partial-monitoring:
     enabled: ${PARTIAL_MONITORING_ENABLED:true}
@@ -204,15 +207,19 @@ watchlist:
       oversold-threshold: 30
       overbought-threshold: 70
       timeframes: "15m,30m,1h"
-    - symbol: CS.D.USCGC.TODAY.IP
+    # Gold epic needs verification — CS.D.USCGC.TODAY.IP was wrong (403 on live API)
+    # Find correct epic at: https://labs.ig.com/sample-apps/api-companion/index.html (search "Gold")
+    # Common candidates: CS.D.CFDGOLD.CFM.IP or CS.D.GOLD.DAILY.IP
+    - symbol: CS.D.CFDGOLD.CFM.IP
       name: Gold
       source: IG
-      enabled: true
+      enabled: false
       type: COMMODITY
       oversold-threshold: 30
       overbought-threshold: 70
       timeframes: "15m,1h,4h"
-    - symbol: CC.D.LCO.FSD.IP
+    # Oil: FSD (forward) epic expired — switched to USS (cash/rolling) contract
+    - symbol: CC.D.LCO.USS.IP
       name: Oil (Brent)
       source: IG
       enabled: true

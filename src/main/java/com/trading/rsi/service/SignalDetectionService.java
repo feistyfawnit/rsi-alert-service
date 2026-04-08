@@ -5,6 +5,8 @@ import com.trading.rsi.domain.SignalLog;
 import com.trading.rsi.event.SignalEvent;
 import com.trading.rsi.model.Candle;
 import com.trading.rsi.model.RsiSignal;
+import com.trading.rsi.service.IGMarketDataClient;
+import com.trading.rsi.service.RsiCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SignalDetectionService {
     
     private final RsiCalculator rsiCalculator;
+    private final IGMarketDataClient igMarketDataClient;
     private final PriceHistoryService priceHistoryService;
     private final MarketDataService marketDataService;
     private final ApplicationEventPublisher eventPublisher;
@@ -35,6 +38,9 @@ public class SignalDetectionService {
 
     @Value("${rsi.watch-proximity-threshold:40}")
     private int watchProximityThreshold;
+
+    @Value("${rsi.partial-require-fast-tf-aligned:true}")
+    private boolean partialRequireFastTfAligned;
 
     private static final int MINIMUM_HISTORY = 28;
     private static final long[] BACKOFF_MINUTES = {2, 5, 15, 60};
@@ -55,6 +61,11 @@ public class SignalDetectionService {
             if (!priceHistoryService.hasMinimumHistory(key, MINIMUM_HISTORY)) {
                 if (isWarmupBackedOff(key)) {
                     log.debug("Warmup backoff active for {} {} — next retry at {}", instrument.getSymbol(), timeframe.trim(), warmupBackoffUntil.get(key));
+                    continue;
+                }
+                // Skip IG warmup if circuit breaker is open (allowance exceeded)
+                if (instrument.getSource() == Instrument.DataSource.IG && igMarketDataClient.isCircuitOpen()) {
+                    log.debug("Skipping warmup for {} {} — IG circuit breaker open", instrument.getSymbol(), timeframe.trim());
                     continue;
                 }
                 log.info("Insufficient history for {} {}, warming up...", instrument.getSymbol(), timeframe);
@@ -132,14 +143,22 @@ public class SignalDetectionService {
             signalType = SignalLog.SignalType.OVERSOLD;
             alignedCount = oversoldCount;
         } else if (oversoldCount >= totalTimeframes - 1 && oversoldCount > 0) {
-            signalType = SignalLog.SignalType.PARTIAL_OVERSOLD;
-            alignedCount = oversoldCount;
+            if (!partialRequireFastTfAligned || isFastestTfAligned(rsiValues, instrument.getTimeframes(), true, instrument.getOversoldThreshold())) {
+                signalType = SignalLog.SignalType.PARTIAL_OVERSOLD;
+                alignedCount = oversoldCount;
+            } else {
+                log.debug("Suppressing PARTIAL_OVERSOLD for {} — fastest TF is lagging (momentum turning)", instrument.getName());
+            }
         } else if (overboughtCount == totalTimeframes) {
             signalType = SignalLog.SignalType.OVERBOUGHT;
             alignedCount = overboughtCount;
         } else if (overboughtCount >= totalTimeframes - 1 && overboughtCount > 0) {
-            signalType = SignalLog.SignalType.PARTIAL_OVERBOUGHT;
-            alignedCount = overboughtCount;
+            if (!partialRequireFastTfAligned || isFastestTfAligned(rsiValues, instrument.getTimeframes(), false, instrument.getOverboughtThreshold())) {
+                signalType = SignalLog.SignalType.PARTIAL_OVERBOUGHT;
+                alignedCount = overboughtCount;
+            } else {
+                log.debug("Suppressing PARTIAL_OVERBOUGHT for {} — fastest TF is lagging (momentum turning)", instrument.getName());
+            }
         } else if (oversoldCount >= 1 && oversoldProximityCount >= 1) {
             signalType = SignalLog.SignalType.WATCH_OVERSOLD;
             alignedCount = oversoldCount;
@@ -190,6 +209,42 @@ public class SignalDetectionService {
         }
     }
     
+    /**
+     * Returns true if the fastest (shortest-period) configured timeframe is on the aligned side.
+     * For PARTIAL_OVERBOUGHT: the fast TF must be >threshold.
+     * For PARTIAL_OVERSOLD: the fast TF must be <threshold.
+     * If the slow TFs are aligned but the fast TF is lagging, momentum has already turned — suppress.
+     */
+    private boolean isFastestTfAligned(Map<String, BigDecimal> rsiValues, String timeframesConfig,
+                                        boolean oversold, double threshold) {
+        String fastestTf = Arrays.stream(timeframesConfig.split(","))
+                .map(String::trim)
+                .min(Comparator.comparingInt(this::timeframeToMinutes))
+                .orElse(null);
+        if (fastestTf == null) return true;
+        BigDecimal fastRsi = rsiValues.get(fastestTf);
+        if (fastRsi == null) return true;
+        return oversold
+                ? fastRsi.doubleValue() < threshold
+                : fastRsi.doubleValue() > threshold;
+    }
+
+    private int timeframeToMinutes(String tf) {
+        return switch (tf.toLowerCase()) {
+            case "1m"  -> 1;
+            case "3m"  -> 3;
+            case "5m"  -> 5;
+            case "10m" -> 10;
+            case "15m" -> 15;
+            case "30m" -> 30;
+            case "1h"  -> 60;
+            case "2h"  -> 120;
+            case "4h"  -> 240;
+            case "1d"  -> 1440;
+            default    -> 9999;
+        };
+    }
+
     private BigDecimal calculateSignalStrength(Map<String, BigDecimal> rsiValues, SignalLog.SignalType signalType, Instrument instrument) {
         BigDecimal totalDeviation = BigDecimal.ZERO;
         
