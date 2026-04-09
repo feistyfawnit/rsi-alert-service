@@ -100,7 +100,7 @@ Config: `WATCH_PROXIMITY_THRESHOLD=40` (default). Env-overridable.
 Notification hierarchy (highest to lowest priority):
 1. 🟢 **OVERSOLD / OVERBOUGHT** — all TFs aligned. Trade signal.
 2. 🟡 **PARTIAL** — all but 1 TF aligned. Watch + follow-up monitoring.
-3. 👀 **WATCH** — 1 TF crossed + others approaching. Check chart.
+3. 👀 **WATCH** — 1 TF crossed + others approaching. Check chart. **Disabled by default** (`WATCH_SIGNALS_ENABLED=false`) — too noisy in volatile markets; all instruments can fire simultaneously. Re-enable when conditions settle.
 
 ### Active Lagging-TF Monitoring (IMPLEMENTED — April 5 2026)
 
@@ -378,3 +378,4 @@ The allowance resets weekly — when exceeded, **all** IG data stops until reset
 | 6 Apr 2026 | Partial monitoring window 120→60 min, interval 15→30 min | Halves max follow-up count (was 7, now max 1–2 in practice). Crypto either aligns within 1h or the setup has failed. Configurable via `PARTIAL_MONITORING_WINDOW` / `PARTIAL_MONITORING_INTERVAL` env vars. |
 | 6 Apr 2026 | Fix WATCH_OVERBOUGHT proximity formula | Bug: `val > (100 - proximity + threshold)` = `val > 130` — always false. WATCH_OVERBOUGHT never fired. Fixed to `val > (100 - proximity)` = `val > 60`. Overbought proximity band is now correctly 60–70 (within 10 pts of threshold). |
 | 8 Apr 2026 | IG data point budget + split polling + 403 handling | IG 10k/week allowance exceeded (Apr 7 blackout). Split polling: Binance 5 min, IG 15 min. Candle-period skip saves ~60% of IG data points. 403 handler now parses body to detect `exceeded-account-historical-data-allowance` vs session expiry. Per-epic 403 tracking prevents cascade. Disabled stale DB records. |
+| 9 Apr 2026 | WATCH signals disabled by default; file logging added | WATCH (1/3 TF) tier disabled (`WATCH_SIGNALS_ENABLED=false`). In volatile markets 6+ WATCH alerts fire simultaneously across all instruments — not actionable and cause notification fatigue. Re-enable via env var when conditions settle. PARTIAL (2/3) + FULL (3/3) unaffected. Added `logback-spring.xml`: rolling daily log file under `./logs/`, 7-day retention, auto-delete. API call rate confirmed safe: Binance ~2.4 rpm (limit 1200), IG guarded by candle-period skip. |

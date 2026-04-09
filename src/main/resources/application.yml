@@ -33,6 +33,8 @@ rsi:
   cooldown-minutes: 120
   watch-proximity-threshold: ${WATCH_PROXIMITY_THRESHOLD:40}
   partial-require-fast-tf-aligned: ${PARTIAL_REQUIRE_FAST_TF:true}
+  watch-signals:
+    enabled: ${WATCH_SIGNALS_ENABLED:false}
 
   quiet-hours:
     enabled: true

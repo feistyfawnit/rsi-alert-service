@@ -42,6 +42,9 @@ public class SignalDetectionService {
     @Value("${rsi.partial-require-fast-tf-aligned:true}")
     private boolean partialRequireFastTfAligned;
 
+    @Value("${rsi.watch-signals.enabled:false}")
+    private boolean watchSignalsEnabled;
+
     private static final int MINIMUM_HISTORY = 28;
     private static final long[] BACKOFF_MINUTES = {2, 5, 15, 60};
 
@@ -159,10 +162,10 @@ public class SignalDetectionService {
             } else {
                 log.debug("Suppressing PARTIAL_OVERBOUGHT for {} — fastest TF is lagging (momentum turning)", instrument.getName());
             }
-        } else if (oversoldCount >= 1 && oversoldProximityCount >= 1) {
+        } else if (watchSignalsEnabled && oversoldCount >= 1 && oversoldProximityCount >= 1) {
             signalType = SignalLog.SignalType.WATCH_OVERSOLD;
             alignedCount = oversoldCount;
-        } else if (overboughtCount >= 1 && overboughtProximityCount >= 1) {
+        } else if (watchSignalsEnabled && overboughtCount >= 1 && overboughtProximityCount >= 1) {
             signalType = SignalLog.SignalType.WATCH_OVERBOUGHT;
             alignedCount = overboughtCount;
         }
