@@ -115,4 +115,59 @@ GET /actuator/health
 
 ---
 
+## How Market Data Works
+
+### One API call = one timeframe's candle history
+
+Each Binance poll makes **one HTTP call per instrument per timeframe**. For Solana with `15m,1h,4h` that is 3 calls:
+
+```
+GET https://api.binance.com/api/v3/klines?symbol=SOLUSDT&interval=15m&limit=1
+GET https://api.binance.com/api/v3/klines?symbol=SOLUSDT&interval=1h&limit=1
+GET https://api.binance.com/api/v3/klines?symbol=SOLUSDT&interval=4h&limit=1
+```
+
+Each returns an array of candles (one per call during normal polling):
+
+```json
+[
+  [
+    1744243200000,  // open time (epoch ms)
+    "132.45",       // open
+    "134.20",       // high
+    "131.80",       // low
+    "133.90",       // close  ← used for RSI and stochastic
+    "84231.5",      // volume
+    1744246799999,  // close time
+    "11284920.3",   // quote asset volume
+    1842,           // number of trades
+    "42100.2",      // taker buy base asset volume
+    "5640230.1",    // taker buy quote asset volume
+    "0"             // ignore
+  ]
+]
+```
+
+### RSI and Stochastic are calculated locally — no extra API calls
+
+**RSI**: calculated from the last 50 close prices held in memory per instrument+timeframe key.  
+Formula: Wilder's smoothing over 14 periods. RSI < 30 = oversold, RSI > 70 = overbought.
+
+**Stochastic (14,3)**: calculated from the last 50 full candles (high/low/close) in memory.  
+Formula: `%K = (Close - LowestLow[14]) / (HighestHigh[14] - LowestLow[14]) × 100`  
+`%D = 3-period SMA of %K` (signal line)  
+%K < 20 = oversold, %K > 80 = overbought.
+
+Stochastic is only calculated and included in the notification when a **FULL 3/3 signal** fires.  
+It does not trigger additional API calls — the candle data is already in memory.
+
+### Polling rates
+
+| Source | Poll interval | Instruments | Calls/poll | Calls/day |
+|--------|--------------|-------------|-----------|-----------|
+| Binance | 300s (5 min) | 4 crypto × 3 TFs | 12 | ~3,456 |
+| IG | 900s (15 min) | 7 instruments × 3 TFs | ≤21 (candle-period skip saves ~60%) | ~500–800 data points |
+
+Binance limit: 1,200 requests/min. Current usage: ~2.4/min. IG limit: 10,000 data points/week.
+
 *See `docs/architecture.md` for system design. See `README.md` for setup.*

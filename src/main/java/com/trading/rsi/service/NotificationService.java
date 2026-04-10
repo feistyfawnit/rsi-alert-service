@@ -3,6 +3,7 @@ package com.trading.rsi.service;
 import com.trading.rsi.domain.SignalLog;
 import com.trading.rsi.event.SignalEvent;
 import com.trading.rsi.model.RsiSignal;
+import com.trading.rsi.model.StochasticResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -207,6 +208,20 @@ public class NotificationService {
                         .append(entry.getValue().setScale(2, RoundingMode.HALF_UP))
                         .append("\n"));
         
+        if (signal.getStochasticValues() != null && !signal.getStochasticValues().isEmpty()) {
+            message.append("\nStochastic (14,3):\n");
+            signal.getStochasticValues().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> {
+                        StochasticResult s = entry.getValue();
+                        message.append("  ").append(entry.getKey())
+                               .append(": %K=").append(s.k())
+                               .append(" %D=").append(s.d())
+                               .append(" → ").append(s.label())
+                               .append("\n");
+                    });
+        }
+
         message.append("\nAction: ");
         message.append(switch (signal.getSignalType()) {
             case OVERSOLD -> "Consider LONG position";

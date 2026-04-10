@@ -18,11 +18,19 @@ public class PriceHistoryService {
     private static final int MAX_HISTORY_SIZE = 50;
     
     private final Map<String, LinkedList<BigDecimal>> priceHistory = new ConcurrentHashMap<>();
+    private final Map<String, LinkedList<Candle>> candleHistory = new ConcurrentHashMap<>();
     private final Map<String, Candle> latestCandleByKey = new ConcurrentHashMap<>();
     private final Map<String, BigDecimal> latestPriceBySymbol = new ConcurrentHashMap<>();
     
     public void updatePriceHistory(String key, Candle candle) {
         latestCandleByKey.put(key, candle);
+        LinkedList<Candle> candles = candleHistory.computeIfAbsent(key, k -> new LinkedList<>());
+        synchronized (candles) {
+            candles.addLast(candle);
+            if (candles.size() > MAX_HISTORY_SIZE) {
+                candles.removeFirst();
+            }
+        }
         updatePriceHistory(key, candle.getClose());
     }
     
@@ -54,6 +62,14 @@ public class PriceHistoryService {
         }
     }
     
+    public List<Candle> getCandleHistory(String key) {
+        LinkedList<Candle> candles = candleHistory.get(key);
+        if (candles == null) return List.of();
+        synchronized (candles) {
+            return new ArrayList<>(candles);
+        }
+    }
+
     public Candle getLatestCandle(String key) {
         return latestCandleByKey.get(key);
     }
@@ -64,6 +80,7 @@ public class PriceHistoryService {
 
     public void clearHistory(String key) {
         priceHistory.remove(key);
+        candleHistory.remove(key);
         latestCandleByKey.remove(key);
     }
     

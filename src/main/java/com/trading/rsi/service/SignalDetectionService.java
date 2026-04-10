@@ -5,6 +5,7 @@ import com.trading.rsi.domain.SignalLog;
 import com.trading.rsi.event.SignalEvent;
 import com.trading.rsi.model.Candle;
 import com.trading.rsi.model.RsiSignal;
+import com.trading.rsi.model.StochasticResult;
 import com.trading.rsi.service.IGMarketDataClient;
 import com.trading.rsi.service.RsiCalculator;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SignalDetectionService {
     
     private final RsiCalculator rsiCalculator;
+    private final StochasticCalculator stochasticCalculator;
     private final IGMarketDataClient igMarketDataClient;
     private final PriceHistoryService priceHistoryService;
     private final MarketDataService marketDataService;
@@ -105,14 +107,15 @@ public class SignalDetectionService {
             return;
         }
         
-        detectSignals(instrument, rsiValues, currentPrice, timeframes.size(), triggerCandle);
+        detectSignals(instrument, rsiValues, currentPrice, timeframes, triggerCandle);
 
         // Update active partial monitoring on every poll cycle
         partialSignalMonitorService.updatePartials(instrument.getSymbol(), rsiValues);
     }
     
     private void detectSignals(Instrument instrument, Map<String, BigDecimal> rsiValues,
-                               BigDecimal currentPrice, int totalTimeframes, Candle triggerCandle) {
+                               BigDecimal currentPrice, List<String> timeframeList, Candle triggerCandle) {
+        int totalTimeframes = timeframeList.size();
         
         int oversoldCount = 0;
         int overboughtCount = 0;
@@ -171,6 +174,11 @@ public class SignalDetectionService {
         }
         
         if (signalType != null && cooldownService.shouldAlert(instrument.getSymbol(), signalType)) {
+            boolean isFullSignal = alignedCount >= totalTimeframes;
+            Map<String, StochasticResult> stochasticValues = isFullSignal
+                    ? calculateStochastics(instrument, timeframeList)
+                    : null;
+
             RsiSignal signal = RsiSignal.builder()
                     .symbol(instrument.getSymbol())
                     .instrumentName(instrument.getName())
@@ -181,6 +189,7 @@ public class SignalDetectionService {
                     .totalTimeframes(totalTimeframes)
                     .signalStrength(calculateSignalStrength(rsiValues, signalType, instrument))
                     .triggerCandle(triggerCandle)
+                    .stochasticValues(stochasticValues)
                     .build();
             
             log.info("Signal detected: {} {} - {} timeframes aligned, RSI values: {}", 
@@ -246,6 +255,19 @@ public class SignalDetectionService {
             case "1d"  -> 1440;
             default    -> 9999;
         };
+    }
+
+    private Map<String, StochasticResult> calculateStochastics(Instrument instrument, List<String> timeframes) {
+        Map<String, StochasticResult> results = new HashMap<>();
+        for (String tf : timeframes) {
+            String key = priceHistoryService.buildKey(instrument.getSymbol(), tf.trim());
+            StochasticResult stoch = stochasticCalculator.calculate(priceHistoryService.getCandleHistory(key));
+            if (stoch != null) {
+                results.put(tf.trim(), stoch);
+                log.debug("Stochastic {} {}: K={} D={} ({})", instrument.getSymbol(), tf.trim(), stoch.k(), stoch.d(), stoch.label());
+            }
+        }
+        return results.isEmpty() ? null : results;
     }
 
     private BigDecimal calculateSignalStrength(Map<String, BigDecimal> rsiValues, SignalLog.SignalType signalType, Instrument instrument) {

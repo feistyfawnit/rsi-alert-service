@@ -23,4 +23,5 @@ public class RsiSignal {
     private int totalTimeframes;
     private BigDecimal signalStrength;
     private Candle triggerCandle;
+    private Map<String, StochasticResult> stochasticValues;
 }
