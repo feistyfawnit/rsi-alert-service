@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -24,6 +25,7 @@ public class PolymarketMonitorService {
     private final WebClient.Builder webClientBuilder;
     private final ApplicationEventPublisher eventPublisher;
     private final AnomalyProperties anomalyProperties;
+    private final PolymarketDiscoveryService discoveryService;
 
     private static final String POLYMARKET_API = "https://gamma-api.polymarket.com";
 
@@ -33,20 +35,51 @@ public class PolymarketMonitorService {
     @Scheduled(fixedDelayString = "${anomaly.polymarket.poll-interval-seconds:300}000")
     public void pollPolymarketOdds() {
         AnomalyProperties.PolymarketConfig cfg = anomalyProperties.getPolymarket();
-        if (!anomalyProperties.isEnabled() || !cfg.isEnabled() || cfg.getMarkets().isEmpty()) {
+        if (!anomalyProperties.isEnabled() || !cfg.isEnabled()) {
+            return;
+        }
+
+        // Determine markets to monitor: discovery mode or manual mode
+        List<MarketToMonitor> marketsToMonitor = resolveMarkets(cfg);
+        if (marketsToMonitor.isEmpty()) {
+            log.debug("No Polymarket markets to monitor (discoveryTags empty and manual markets empty)");
             return;
         }
 
         WebClient client = webClientBuilder.baseUrl(POLYMARKET_API).build();
 
-        for (AnomalyProperties.MarketConfig market : cfg.getMarkets()) {
+        for (MarketToMonitor market : marketsToMonitor) {
             try {
-                fetchAndAnalyze(client, market.getSlug(), market.getName());
+                fetchAndAnalyze(client, market.slug(), market.name());
             } catch (Exception e) {
-                log.debug("Polymarket poll failed for {}: {}", market.getSlug(), e.getMessage());
+                log.debug("Polymarket poll failed for {}: {}", market.slug(), e.getMessage());
             }
         }
     }
+
+    private List<MarketToMonitor> resolveMarkets(AnomalyProperties.PolymarketConfig cfg) {
+        List<String> discoveryTags = cfg.getDiscoveryTags();
+
+        // Discovery mode: fetch active markets by tags
+        if (discoveryTags != null && !discoveryTags.isEmpty()) {
+            List<PolymarketDiscoveryService.DiscoveredMarket> discovered = discoveryService.discoverMarkets(cfg);
+            return discovered.stream()
+                .filter(PolymarketDiscoveryService.DiscoveredMarket::isActive)
+                .map(m -> new MarketToMonitor(m.slug(), m.name()))
+                .collect(Collectors.toList());
+        }
+
+        // Manual mode: use hardcoded list (legacy behavior)
+        if (cfg.getMarkets() != null && !cfg.getMarkets().isEmpty()) {
+            return cfg.getMarkets().stream()
+                .map(m -> new MarketToMonitor(m.getSlug(), m.getName()))
+                .collect(Collectors.toList());
+        }
+
+        return List.of();
+    }
+
+    private record MarketToMonitor(String slug, String name) {}
 
     private void fetchAndAnalyze(WebClient client, String slug, String name) {
         client.get()

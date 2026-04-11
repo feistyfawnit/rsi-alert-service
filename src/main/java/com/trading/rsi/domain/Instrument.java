@@ -50,6 +50,9 @@ public class Instrument {
     @Column(name = "timeframes")
     private String timeframes = "1m,5m,1h,4h";
     
+    @Column(name = "market_close_utc")
+    private Integer marketCloseUtc;
+    
     @Column(name = "created_at")
     private LocalDateTime createdAt;
     

@@ -111,4 +111,10 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 ---
 
+## Potential Future Work / Backlog
+
+- **Momentum Fading Detector** — When higher timeframes show full RSI alignment (e.g., 3/3 overbought) but lower timeframes (1m–15m) start flipping opposite (oversold), it signals exhaustion of the primary move. This was the exit signal you used today: S&P 3/3 overbought but 1m–15m turning oversold = take profit on short. Formalizing this as a notification ("FAST TF DIVERGENCE — consider taking profit") would provide actionable exit timing without requiring manual chart checks. No new API calls needed — uses in-memory RSI values already calculated.
+
+- **Price Momentum Surge Detector** — Detects rapid price moves (>0.5% in 15min or >1% in 1h) *before* RSI aligns across timeframes. Unlike the volume anomaly detector, this watches percentage change speed, not volume. Key feature: require simultaneous surge across 2+ indices (S&P + DAX) to filter single-market noise. Use case: the April 7 pre-announcement buying (5–6pm UTC) where price surged on moderate volume, well before RSI 3/3 alignment and hours before Trump's 8pm statement. Bidirectional (surge up = possible news leak/institutional flow; surge down = risk-off event). Uses existing 15m candle data — no extra API calls, no 1m TF needed.
+
 *Ivan T & Brian H — Private Use — Not for Distribution*

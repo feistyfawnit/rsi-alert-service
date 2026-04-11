@@ -126,16 +126,19 @@ anomaly:
     poll-interval-seconds: 300
     odds-shift-threshold-percent: 8
     window-minutes: 30
-    markets:
-      # Verify/update slugs at polymarket.com — these are examples for the documented patterns
-      - slug: will-the-us-strike-iran-in-2025
-        name: "US strikes on Iran"
-      - slug: will-there-be-a-russia-ukraine-ceasefire-in-2025
-        name: "Russia-Ukraine ceasefire"
-      - slug: will-north-korea-conduct-a-nuclear-test-in-2025
-        name: "North Korea nuclear test"
-      - slug: will-the-us-impose-new-tariffs-in-the-next-30-days
-        name: "US tariff announcement"
+    # Discovery mode: fetches active markets by tag (recommended — avoids expired markets)
+    # Set empty [] to use manual markets list below
+    discovery-tags:
+      - politics
+      - geopolitics
+    max-discovery-markets: 10
+    excluded-slugs: []  # Markets to ignore from discovery
+    # Manual mode: only used if discovery-tags is empty
+    # Warning: Prediction markets expire — slugs go stale. Prefer discovery mode.
+    markets: []
+      # Example (legacy mode):
+      # - slug: will-trump-announce-tariffs-on-april-11
+      #   name: "Trump tariff announcement"
 
 archive:
   enabled: ${ARCHIVE_ENABLED:true}
