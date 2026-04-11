@@ -23,6 +23,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -68,9 +69,11 @@ class SignalDetectionServiceTest {
         Instrument instrument = createInstrument("BTCUSDT", "15m,1h,4h", Instrument.DataSource.BINANCE);
         String key = "BTCUSDT:15m";
 
-        when(priceHistoryService.buildKey("BTCUSDT", "15m")).thenReturn(key);
-        when(priceHistoryService.hasMinimumHistory(key, 28)).thenReturn(false);
-        when(igMarketDataClient.isCircuitOpen()).thenReturn(false);
+        lenient().when(priceHistoryService.buildKey("BTCUSDT", "15m")).thenReturn(key);
+        lenient().when(priceHistoryService.buildKey("BTCUSDT", "1h")).thenReturn("BTCUSDT:1h");
+        lenient().when(priceHistoryService.buildKey("BTCUSDT", "4h")).thenReturn("BTCUSDT:4h");
+        lenient().when(priceHistoryService.hasMinimumHistory(anyString(), eq(28))).thenReturn(false);
+        lenient().when(igMarketDataClient.isCircuitOpen()).thenReturn(false);
 
         // Warmup returns some candles
         Candle candle = Candle.builder()
@@ -93,29 +96,33 @@ class SignalDetectionServiceTest {
 
     @Test
     void detectSignals_fullOversold_firesSignal() {
-        // Set up RSI values all below 30 (full oversold)
-        Map<String, BigDecimal> rsiValues = Map.of(
-            "15m", new BigDecimal("25"),
-            "1h", new BigDecimal("28"),
-            "4h", new BigDecimal("22")
-        );
-
-        when(cooldownService.shouldAlert(anyString(), any())).thenReturn(true);
+        // Setup mocks for price history
         when(priceHistoryService.buildKey(anyString(), anyString())).thenReturn("key");
-        when(stochasticCalculator.calculate(any())).thenReturn(
-            new StochasticResult(new BigDecimal("15"), new BigDecimal("20"), "OVERSOLD")
+        when(priceHistoryService.hasMinimumHistory(anyString(), eq(28))).thenReturn(true);
+        when(priceHistoryService.getPriceHistory(anyString())).thenReturn(
+            java.util.stream.IntStream.range(0, 30)
+                .mapToObj(i -> new BigDecimal(100 + i))
+                .toList()
         );
-
-        // Use reflection to call the private detectSignals method via analyze
-        Instrument instrument = createInstrument("BTCUSDT", "15m,1h,4h", Instrument.DataSource.BINANCE);
-        List<String> timeframes = List.of("15m", "1h", "4h");
-        Candle triggerCandle = Candle.builder()
-            .timestamp(Instant.now())
-            .close(new BigDecimal("50000"))
-            .build();
+        when(priceHistoryService.getLatestCandle(anyString())).thenReturn(
+            Candle.builder()
+                .timestamp(Instant.now())
+                .close(new BigDecimal("129"))
+                .build()
+        );
+        when(priceHistoryService.getCandleHistory(anyString())).thenReturn(List.of());
+        when(rsiCalculator.calculateRsi(any(), anyInt())).thenReturn(new BigDecimal("25"));
+        when(cooldownService.shouldAlert(anyString(), any())).thenReturn(true);
+        when(stochasticCalculator.calculate(any())).thenReturn(
+            new StochasticResult(new BigDecimal("15"), new BigDecimal("20"))
+        );
 
         // Trigger signal detection
+        Instrument instrument = createInstrument("BTCUSDT", "15m,1h,4h", Instrument.DataSource.BINANCE);
         signalDetectionService.analyzeInstrument(instrument);
+
+        // Verify that a signal event was published
+        verify(eventPublisher, atLeastOnce()).publishEvent(any(SignalEvent.class));
     }
 
     @Test

@@ -115,8 +115,11 @@ public class MarketDataPollingService {
                 }
                 if (isIgOutsideMarketHours(instrument)) {
                     if (igSkipLoggedOnce.add(instrument.getSymbol())) {
+                        int marketClose = instrument.getMarketCloseUtc() != null 
+                                ? instrument.getMarketCloseUtc() 
+                                : igMarketEndUtc;
                         log.info("Skipping {} ({}) — IG market closed (outside {}:00–{}:00 UTC)",
-                                instrument.getName(), instrument.getSymbol(), igMarketStartUtc, igMarketEndUtc);
+                                instrument.getName(), instrument.getSymbol(), igMarketStartUtc, marketClose);
                     }
                     continue;
                 } else {
@@ -143,7 +146,12 @@ public class MarketDataPollingService {
         DayOfWeek day = now.getDayOfWeek();
         if (day == DayOfWeek.SATURDAY) return true;
         if (day == DayOfWeek.SUNDAY) return hourUtc < igSundayStartUtc;
-        return hourUtc < igMarketStartUtc || hourUtc >= igMarketEndUtc;
+        
+        // Use per-instrument market close time if configured, otherwise fall back to global
+        int marketClose = instrument.getMarketCloseUtc() != null 
+                ? instrument.getMarketCloseUtc() 
+                : igMarketEndUtc;
+        return hourUtc < igMarketStartUtc || hourUtc >= marketClose;
     }
 
     private void updateInstrumentData(Instrument instrument) {
