@@ -20,6 +20,7 @@ import java.time.ZonedDateTime;
 public class AnomalyNotificationService {
 
     private final WebClient.Builder webClientBuilder;
+    private final AppSettingsService appSettingsService;
 
     @Value("${notifications.ntfy.enabled:true}")
     private boolean ntfyEnabled;
@@ -44,11 +45,23 @@ public class AnomalyNotificationService {
     public void handleAnomalyEvent(AnomalyEvent event) {
         if (!ntfyEnabled) return;
         AnomalyAlert alert = event.getAlert();
+        String activePosition = appSettingsService.get(AppSettingsService.KEY_ACTIVE_POSITION, "");
+        if (activePosition == null || activePosition.isBlank()) {
+            log.debug("No active position — suppressing anomaly alert for {}", alert.getMarket());
+            return;
+        }
         if (alert.getSeverity() != AnomalyAlert.Severity.CRITICAL && isQuietHours()) {
             log.debug("Quiet hours — suppressing {} anomaly alert for {}", alert.getSeverity(), alert.getMarket());
             return;
         }
         sendUrgentAlert(alert);
+    }
+
+    private boolean hasOpenPositionFor(AnomalyAlert alert) {
+        String activePosition = appSettingsService.get(AppSettingsService.KEY_ACTIVE_POSITION, "");
+        if (activePosition == null || activePosition.isBlank()) return false;
+        Object symbol = alert.getDetails().get("symbol");
+        return activePosition.equalsIgnoreCase(String.valueOf(symbol));
     }
 
     private boolean isQuietHours() {
@@ -127,6 +140,9 @@ public class AnomalyNotificationService {
             }
         }
 
+        if (hasOpenPositionFor(alert)) {
+            sb.append("\n🏦 YOU HAVE AN OPEN POSITION in this instrument — review immediately.");
+        }
         sb.append("\n⏸ Pause any pending automated trades until picture clears.");
         if (alert.getSeverity() == AnomalyAlert.Severity.CRITICAL) {
             sb.append("\n🔴 CRITICAL: Consider closing open positions immediately.");

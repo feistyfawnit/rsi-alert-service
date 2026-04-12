@@ -57,7 +57,7 @@ Returns per-timeframe RSI values, distance from thresholds, and verdict (FULL / 
 
 ## Per-Instrument Muting — `/api/signals/mute`
 
-Suppresses **all** notifications (FULL, PARTIAL, WATCH) for a specific instrument. Use when you can't trade a particular instrument (e.g. crypto unavailable, IG instrument suspended). In-memory only — resets on restart.
+Suppresses **all** notifications (FULL, PARTIAL, WATCH) for a specific instrument. Persisted to DB — survives restarts.
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -69,14 +69,35 @@ Suppresses **all** notifications (FULL, PARTIAL, WATCH) for a specific instrumen
 
 ## No-Trade Mode — `/api/signals/no-trade-mode`
 
-Suppresses PARTIAL and WATCH notifications for **all** instruments. FULL signals still fire.
-In-memory only — resets on restart.
+Suppresses PARTIAL and WATCH notifications for **all** instruments. FULL signals still fire. Persisted to DB — survives restarts.
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/api/signals/no-trade-mode/on` | Enable no-trade mode |
 | `POST` | `/api/signals/no-trade-mode/off` | Disable no-trade mode |
 | `GET` | `/api/signals/no-trade-mode` | Current status |
+
+---
+
+## Settings & Active Position — `/api/settings`
+
+Manages persistent operational state (stored in `app_settings` DB table). Used to track open positions and gate anomaly alerts.
+
+**Anomaly alerts are suppressed when no `active_position` is set.** They re-enable automatically when a FULL signal fires or you set a position manually.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/settings` | All current settings (no-trade mode, muted symbols, active position) |
+| `GET` | `/api/settings/active-position` | Current open position and whether one exists |
+| `POST` | `/api/settings/active-position/{symbol}` | Manually set active position (e.g. after entering a trade) |
+| `DELETE` | `/api/settings/active-position` | Clear active position when trade is closed |
+
+### Example: Close a trade
+
+```bash
+curl -X DELETE http://localhost:8080/api/settings/active-position
+# → {"activePosition": "", "message": "Active position cleared — anomaly alerts back to informational mode"}
+```
 
 ---
 

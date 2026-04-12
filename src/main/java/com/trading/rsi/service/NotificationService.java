@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
@@ -30,6 +31,7 @@ public class NotificationService {
     
     private final WebClient.Builder webClientBuilder;
     private final ClaudeEnrichmentService claudeEnrichmentService;
+    private final AppSettingsService appSettingsService;
     
     @Value("${notifications.ntfy.enabled:true}")
     private boolean ntfyEnabled;
@@ -45,6 +47,15 @@ public class NotificationService {
 
     private final AtomicBoolean noTradeModeActive = new AtomicBoolean(false);
     private final Set<String> mutedSymbols = ConcurrentHashMap.newKeySet();
+
+    @PostConstruct
+    void loadPersistedSettings() {
+        boolean savedNoTradeMode = appSettingsService.getBoolean(AppSettingsService.KEY_NO_TRADE_MODE, false);
+        noTradeModeActive.set(savedNoTradeMode);
+        Set<String> savedMuted = appSettingsService.getStringSet(AppSettingsService.KEY_MUTED_SYMBOLS);
+        mutedSymbols.addAll(savedMuted);
+        log.info("Settings loaded from DB — noTradeMode={} mutedSymbols={}", savedNoTradeMode, savedMuted);
+    }
     
     @Value("${rsi.quiet-hours.enabled:true}")
     private boolean quietHoursEnabled;
@@ -115,11 +126,13 @@ public class NotificationService {
     
     public void enableNoTradeMode() {
         noTradeModeActive.set(true);
+        appSettingsService.setBoolean(AppSettingsService.KEY_NO_TRADE_MODE, true);
         log.info("No-trade mode ENABLED — PARTIAL and WATCH signals suppressed");
     }
 
     public void disableNoTradeMode() {
         noTradeModeActive.set(false);
+        appSettingsService.setBoolean(AppSettingsService.KEY_NO_TRADE_MODE, false);
         log.info("No-trade mode DISABLED — all signals active");
     }
 
@@ -129,11 +142,13 @@ public class NotificationService {
 
     public void muteSymbol(String symbol) {
         mutedSymbols.add(symbol.toUpperCase());
+        appSettingsService.setStringSet(AppSettingsService.KEY_MUTED_SYMBOLS, mutedSymbols);
         log.info("Symbol {} muted — all alerts suppressed", symbol);
     }
 
     public void unmuteSymbol(String symbol) {
         mutedSymbols.remove(symbol.toUpperCase());
+        appSettingsService.setStringSet(AppSettingsService.KEY_MUTED_SYMBOLS, mutedSymbols);
         log.info("Symbol {} unmuted — alerts active", symbol);
     }
 

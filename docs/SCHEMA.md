@@ -64,6 +64,30 @@ Historical record of all RSI signals detected.
 
 ---
 
+---
+
+### `app_settings`
+
+Runtime operational state — persists across restarts. Managed via `/api/settings`.
+
+| Column | Type | Constraints | Notes |
+|--------|------|-------------|-------|
+| `setting_key` | `VARCHAR(255)` | PRIMARY KEY | e.g. `no_trade_mode`, `muted_symbols`, `active_position` |
+| `setting_value` | `VARCHAR(255)` | | String-encoded value |
+| `updated_at` | `TIMESTAMP` | | Auto-set on save |
+
+**Known keys:**
+
+| Key | Values | Description |
+|-----|--------|-------------|
+| `no_trade_mode` | `true` / `false` | Suppress PARTIAL + WATCH signals |
+| `muted_symbols` | Comma-separated symbols e.g. `BCHUSDT,ETHUSDT` | Fully silenced instruments |
+| `active_position` | Symbol e.g. `SOLUSDT`, or absent | Currently open trade — gates anomaly alerts |
+
+**Note:** Unlike `instruments`, this table is never seeded from YAML. All changes are DB-only and survive restarts.
+
+---
+
 ## Entity Relationship
 
 ```
@@ -71,6 +95,11 @@ Historical record of all RSI signals detected.
 │ instrument  │──────<│ signal_log  │
 │  (config)   │   1:M │  (events)   │
 └─────────────┘       └─────────────┘
+
+┌──────────────┐
+│ app_settings │  (operational state — no FK relationships)
+│  (key/value) │
+└──────────────┘
 ```
 
 No foreign key constraints (denormalized for simplicity with `ddl-auto`).
@@ -114,10 +143,27 @@ ORDER BY count DESC;
 
 ---
 
-## Why No Flyway?
+## Flyway Consideration
 
-For a personal 2-table schema with infrequent changes, Hibernate `ddl-auto: update` + this documentation is sufficient. If schema complexity grows beyond 5 tables or team size >1, consider migrating to Flyway/Liquibase.
+Currently using Hibernate `ddl-auto: update`. This is acceptable for a personal single-dev setup but has trade-offs:
+
+| | `ddl-auto: update` (current) | Flyway |
+|---|---|---|
+| Schema visibility | Scattered across JPA entities | Versioned SQL files in `db/migration/` |
+| Rollback | Manual SQL or git revert | Built-in rollback scripts |
+| Column removal | **Never auto-drops columns** — must do manually | Explicit down migrations |
+| Audit trail | None | Full version history |
+
+**Recommendation:** Migrate to Flyway at 3+ tables (we are there). Next session work.
+
+To see the live schema at any time:
+
+```bash
+docker exec rsi-postgres psql -U postgres -d rsi_alerts -c "\dt"
+docker exec rsi-postgres psql -U postgres -d rsi_alerts -c "\d app_settings"
+docker exec rsi-postgres psql -U postgres -d rsi_alerts -c "SELECT * FROM app_settings;"
+```
 
 ---
 
-*Schema version: April 2026*
+*Schema version: April 2026 — 3 tables: `instruments`, `signal_logs`, `app_settings`*

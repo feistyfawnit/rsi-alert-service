@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 public class SignalLogService {
     
     private final SignalLogRepository signalLogRepository;
+    private final AppSettingsService appSettingsService;
     
     @EventListener
     @Async
@@ -39,5 +40,17 @@ public class SignalLogService {
         
         signalLogRepository.save(logEntry);
         log.info("Signal logged: {} {} at ${}", signal.getSymbol(), signal.getSignalType(), signal.getCurrentPrice());
+
+        boolean isFullSignal = signal.getSignalType() == SignalLog.SignalType.OVERSOLD
+                || signal.getSignalType() == SignalLog.SignalType.OVERBOUGHT;
+        if (isFullSignal) {
+            String current = appSettingsService.get(AppSettingsService.KEY_ACTIVE_POSITION, "");
+            if (current == null || current.isBlank()) {
+                appSettingsService.set(AppSettingsService.KEY_ACTIVE_POSITION, signal.getSymbol());
+                log.info("Active position set to {} (full {} signal)", signal.getSymbol(), signal.getSignalType());
+            } else {
+                log.debug("Active position already set to {} — not overwriting with {}", current, signal.getSymbol());
+            }
+        }
     }
 }
