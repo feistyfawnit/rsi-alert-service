@@ -60,6 +60,11 @@ public class VolumeAnomalyDetector {
         if (stdDev == 0) return;
 
         double currentVolume = candle.getVolume().doubleValue();
+        String direction = (candle.getClose() != null && candle.getOpen() != null)
+                ? (candle.getClose().compareTo(candle.getOpen()) > 0 ? "bullish"
+                   : candle.getClose().compareTo(candle.getOpen()) < 0 ? "bearish" : "neutral")
+                : "unknown";
+
         double zScore = (currentVolume - mean) / stdDev;
 
         log.debug("Volume [{}:{}] current={} mean={} z={}",
@@ -86,8 +91,8 @@ public class VolumeAnomalyDetector {
                         .type(AnomalyAlert.AnomalyType.VOLUME_SPIKE)
                         .severity(severity)
                         .market(instrumentName + " (" + timeframe + ")")
-                        .description(String.format("Volume spike %.1f\u03c3 above baseline — %s %s",
-                                zScore, instrumentName, timeframe))
+                        .description(String.format("Volume spike %.1f\u03c3 above baseline \u2014 %s %s (%s candle)",
+                                zScore, instrumentName, timeframe, direction))
                         .detectedAt(now)
                         .details(Map.of(
                                 "symbol", symbol,
@@ -95,7 +100,8 @@ public class VolumeAnomalyDetector {
                                 "currentVolume", currentVolume,
                                 "baselineMean", mean,
                                 "stdDev", stdDev,
-                                "zScore", zScore
+                                "zScore", zScore,
+                        "direction", direction
                         ))
                         .build();
 

@@ -119,6 +119,16 @@ See [docs/api.md](docs/api.md) for adding instruments via the REST API.
 | 2 | 🟡 PARTIAL | All but 1 TF aligned | default (3) |
 | 3 | 👀 WATCH | 1 TF crossed + others approaching | low (2) |
 
+## Trade Duration & IG Financing Costs
+
+IG Daily Funded Bets (DFB) accrue **overnight financing charges every calendar day** the position is held, regardless of whether markets are open. Typical cost on a crypto position:
+
+- Daily Admin Fee: ~€0.14/day
+- Daily Financing Adjustment: ~€0.38/day
+- **Total: ~€0.50–0.55/day per standard position**
+
+> **Target in-and-out within 1–4 days.** If a trade hasn't moved in your favour within 3–4 days, the carry cost alone is a valid reason to close — regardless of RSI. A week's hold costs ~€3.50+ before spread is considered.
+
 ## Troubleshooting
 
 See [QUICKSTART.md](QUICKSTART.md) for detailed troubleshooting. Quick checks:

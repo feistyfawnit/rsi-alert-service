@@ -39,6 +39,9 @@ public class PartialSignalMonitorService {
     @Value("${rsi.partial-monitoring.follow-up-interval-minutes:30}")
     private int followUpIntervalMinutes;
 
+    @Value("${rsi.partial-monitoring.max-initial-gap:8}")
+    private double maxInitialGap;
+
     private final Map<String, ActivePartial> activePartials = new ConcurrentHashMap<>();
 
     public PartialSignalMonitorService(NotificationService notificationService) {
@@ -61,6 +64,12 @@ public class PartialSignalMonitorService {
         }
 
         BigDecimal gap = laggingRsi.subtract(BigDecimal.valueOf(threshold)).abs();
+        if (gap.doubleValue() > maxInitialGap) {
+            log.debug("Suppressing partial for {} — lagging {} RSI {} is {} pts from threshold {} (max gap: {})",
+                    instrumentName, laggingTimeframe, laggingRsi.setScale(2, RoundingMode.HALF_UP),
+                    String.format("%.1f", gap.doubleValue()), (int) threshold, maxInitialGap);
+            return;
+        }
         activePartials.put(symbol, ActivePartial.builder()
                 .symbol(symbol)
                 .instrumentName(instrumentName)
@@ -93,17 +102,10 @@ public class PartialSignalMonitorService {
             BigDecimal currentRsi = rsiValues.get(partial.getLaggingTimeframe());
             log.info("Active partial monitoring EXPIRED for {} after {} min", symbol, windowMinutes);
             activePartials.remove(symbol);
-            if (notificationService.getMutedSymbols().contains(symbol)) {
-                log.debug("Symbol {} is muted — skipping expiry notification", symbol);
-                return;
-            }
-            notificationService.sendRawNotification(
-                    partial.getInstrumentName() + " Partial Expired",
-                    partial.getLaggingTimeframe() + " RSI did not align within " + windowMinutes + " min window.\n"
-                            + "Final " + partial.getLaggingTimeframe() + " RSI: "
-                            + (currentRsi != null ? currentRsi.setScale(2, RoundingMode.HALF_UP) : "unknown")
-                            + " (threshold: " + (int) partial.getThreshold() + ")",
-                    "low", "hourglass_not_done");
+            log.info("Partial expired (no notification) — {} {} RSI: {} vs threshold {}",
+                    partial.getInstrumentName(), partial.getLaggingTimeframe(),
+                    currentRsi != null ? currentRsi.setScale(2, RoundingMode.HALF_UP) : "unknown",
+                    (int) partial.getThreshold());
             return;
         }
 

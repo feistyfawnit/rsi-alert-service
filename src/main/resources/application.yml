@@ -51,6 +51,7 @@ rsi:
     enabled: ${PARTIAL_MONITORING_ENABLED:true}
     window-minutes: ${PARTIAL_MONITORING_WINDOW:60}
     follow-up-interval-minutes: ${PARTIAL_MONITORING_INTERVAL:30}
+    max-initial-gap: ${PARTIAL_MAX_INITIAL_GAP:8}
 
   demo:
     account-balance: 10000

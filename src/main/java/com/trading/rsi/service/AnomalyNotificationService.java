@@ -106,12 +106,20 @@ public class AnomalyNotificationService {
                 Object zObj = alert.getDetails().get("zScore");
                 Object volObj = alert.getDetails().get("currentVolume");
                 Object meanObj = alert.getDetails().get("baselineMean");
+                Object dirObj = alert.getDetails().get("direction");
                 if (volObj instanceof Number && meanObj instanceof Number && zObj instanceof Number) {
                     double z = ((Number) zObj).doubleValue();
                     double vol = ((Number) volObj).doubleValue();
                     double mean = ((Number) meanObj).doubleValue();
                     sb.append(String.format("Volume: %.0f vs baseline %.0f%n", vol, mean));
                     sb.append(String.format("Z-score: %.1f\u03c3 above normal%n", z));
+                }
+                if (dirObj instanceof String dir) {
+                    switch (dir) {
+                        case "bullish" -> sb.append("\uD83D\uDCC8 Direction: BULLISH candle — price rose on spike (buy pressure / breakout)\n");
+                        case "bearish" -> sb.append("\uD83D\uDCC9 Direction: BEARISH candle — price fell on spike (sell pressure / panic)\n");
+                        default -> sb.append("\u27A1\uFE0F Direction: Neutral candle — direction unclear\n");
+                    }
                 }
             }
             case CROSS_CORRELATION -> {
