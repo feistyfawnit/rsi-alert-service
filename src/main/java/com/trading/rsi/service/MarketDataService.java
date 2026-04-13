@@ -4,6 +4,7 @@ import com.trading.rsi.domain.Instrument;
 import com.trading.rsi.model.Candle;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -27,9 +28,9 @@ public class MarketDataService {
     private final IGMarketDataClient igMarketDataClient;
     
     public MarketDataService(
-            @Value("${market.binance.base-url}") String binanceUrl,
-            @Value("${market.finnhub.base-url}") String finnhubUrl,
-            @Value("${market.finnhub.api-key:}") String finnhubApiKey,
+            @Value("${market.binance.base-url}") @NonNull String binanceUrl,
+            @Value("${market.finnhub.base-url}") @NonNull String finnhubUrl,
+            @Value("${market.finnhub.api-key:}") @NonNull String finnhubApiKey,
             IGMarketDataClient igMarketDataClient,
             WebClient.Builder webClientBuilder) {
         this.binanceClient = webClientBuilder.baseUrl(binanceUrl).build();

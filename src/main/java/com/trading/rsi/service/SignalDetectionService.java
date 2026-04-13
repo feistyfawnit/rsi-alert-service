@@ -6,8 +6,6 @@ import com.trading.rsi.event.SignalEvent;
 import com.trading.rsi.model.Candle;
 import com.trading.rsi.model.RsiSignal;
 import com.trading.rsi.model.StochasticResult;
-import com.trading.rsi.service.IGMarketDataClient;
-import com.trading.rsi.service.RsiCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -179,7 +177,7 @@ public class SignalDetectionService {
                     ? calculateStochastics(instrument, timeframeList)
                     : null;
 
-            RsiSignal signal = RsiSignal.builder()
+            RsiSignal signal = Objects.requireNonNull(RsiSignal.builder()
                     .symbol(instrument.getSymbol())
                     .instrumentName(instrument.getName())
                     .signalType(signalType)
@@ -190,7 +188,7 @@ public class SignalDetectionService {
                     .signalStrength(calculateSignalStrength(rsiValues, signalType, instrument))
                     .triggerCandle(triggerCandle)
                     .stochasticValues(stochasticValues)
-                    .build();
+                    .build());
             
             log.info("Signal detected: {} {} - {} timeframes aligned, RSI values: {}", 
                     instrument.getName(), signalType, alignedCount, rsiValues);

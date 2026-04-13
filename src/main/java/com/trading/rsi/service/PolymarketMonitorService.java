@@ -85,10 +85,10 @@ public class PolymarketMonitorService {
         client.get()
                 .uri("/markets?slug={slug}", slug)
                 .retrieve()
-                .bodyToFlux(Map.class)
+                .bodyToFlux(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {})
                 .next()
                 .subscribe(
-                        market -> processMarketData(slug, name, market),
+                        (Map<String, Object> market) -> processMarketData(slug, name, market),
                         error -> log.warn("Failed to fetch Polymarket [{}]: {}", slug, error.getMessage())
                 );
     }
@@ -152,7 +152,7 @@ public class PolymarketMonitorService {
                 AnomalyAlert.Severity severity = shiftPp >= threshold * 2
                         ? AnomalyAlert.Severity.CRITICAL : AnomalyAlert.Severity.HIGH;
 
-                AnomalyAlert alert = AnomalyAlert.builder()
+                AnomalyAlert alert = Objects.requireNonNull(AnomalyAlert.builder()
                         .type(AnomalyAlert.AnomalyType.POLYMARKET_ODDS_SHIFT)
                         .severity(severity)
                         .market(name)
@@ -165,7 +165,7 @@ public class PolymarketMonitorService {
                                 "shiftPp", shiftPp,
                                 "windowMinutes", windowMinutes
                         ))
-                        .build();
+                        .build());
 
                 log.warn("POLYMARKET ANOMALY: {} — {}pp shift in {}min (YES={}%)",
                         name, String.format("%.1f", shiftPp), windowMinutes,

@@ -4,6 +4,7 @@ import com.trading.rsi.domain.AppSetting;
 import com.trading.rsi.repository.AppSettingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
@@ -22,20 +23,20 @@ public class AppSettingsService {
 
     private final AppSettingRepository repository;
 
-    public String get(String key, String defaultValue) {
+    public String get(@NonNull String key, String defaultValue) {
         String val = repository.findById(key)
                 .map(AppSetting::getValue)
                 .orElse(null);
         return val != null ? val : defaultValue;
     }
 
-    public boolean getBoolean(String key, boolean defaultValue) {
+    public boolean getBoolean(@NonNull String key, boolean defaultValue) {
         return repository.findById(key)
                 .map(s -> Boolean.parseBoolean(s.getValue()))
                 .orElse(defaultValue);
     }
 
-    public Set<String> getStringSet(String key) {
+    public Set<String> getStringSet(@NonNull String key) {
         String val = get(key, "");
         if (val == null || val.isBlank()) return Collections.emptySet();
         return Arrays.stream(val.split(","))
@@ -44,7 +45,7 @@ public class AppSettingsService {
                 .collect(Collectors.toSet());
     }
 
-    public void set(String key, String value) {
+    public void set(@NonNull String key, String value) {
         AppSetting setting = repository.findById(key)
                 .orElse(AppSetting.builder().key(key).build());
         setting.setValue(value);
@@ -52,15 +53,15 @@ public class AppSettingsService {
         log.debug("App setting saved: {} = {}", key, value);
     }
 
-    public void setBoolean(String key, boolean value) {
+    public void setBoolean(@NonNull String key, boolean value) {
         set(key, String.valueOf(value));
     }
 
-    public void setStringSet(String key, Set<String> values) {
+    public void setStringSet(@NonNull String key, Set<String> values) {
         set(key, String.join(",", values));
     }
 
-    public void delete(String key) {
+    public void delete(@NonNull String key) {
         repository.deleteById(key);
         log.debug("App setting deleted: {}", key);
     }

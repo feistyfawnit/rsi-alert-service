@@ -132,10 +132,7 @@ public class PartialSignalMonitorService {
                             + laggingRsi.setScale(2, RoundingMode.HALF_UP)
                             + " (crossed " + (isOversold ? "<" : ">") + (int) partial.getThreshold() + ")\n"
                             + "All timeframes now aligned!\n\n"
-                            + "This was a tracked partial — check chart and consider entry.",
-                    "urgent",
-                    isOversold ? "chart_with_upwards_trend,rotating_light"
-                               : "chart_with_downwards_trend,rotating_light");
+                            + "This was a tracked partial — check chart and consider entry.");
             return;
         }
 
@@ -170,8 +167,7 @@ public class PartialSignalMonitorService {
                             + laggingRsi.setScale(2, RoundingMode.HALF_UP)
                             + " -> needs " + (isOversold ? "<" : ">") + (int) partial.getThreshold()
                             + " (" + String.format("%.1f", currentGap) + " pts away, closing)\n"
-                            + minutesActive + " min elapsed, " + minutesRemaining + " min remaining",
-                    "default", "eyes");
+                            + minutesActive + " min elapsed, " + minutesRemaining + " min remaining");
         }
     }
 

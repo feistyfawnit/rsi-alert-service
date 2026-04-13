@@ -290,21 +290,10 @@ public class NotificationService {
         return stopPercentCrypto;
     }
     
-    public void sendRawNotification(String title, String message, String priority, String tags) {
+    public void sendRawNotification(String title, String message) {
         telegramNotificationService.send(title, message);
     }
 
-    private String getTagsForSignal(RsiSignal signal) {
-        return switch (signal.getSignalType()) {
-            case OVERSOLD -> "chart_with_upwards_trend,money_with_wings";
-            case OVERBOUGHT -> "chart_with_downwards_trend,warning";
-            case PARTIAL_OVERSOLD -> "eyes,chart_increasing";
-            case PARTIAL_OVERBOUGHT -> "eyes,chart_decreasing";
-            case WATCH_OVERSOLD -> "mag,chart_increasing";
-            case WATCH_OVERBOUGHT -> "mag,chart_decreasing";
-        };
-    }
-    
     private boolean isQuietHours() {
         if (!quietHoursEnabled) {
             return false;

@@ -9,7 +9,6 @@ import com.trading.rsi.model.RsiSignal;
 import com.trading.rsi.repository.InstrumentRepository;
 import com.trading.rsi.service.IGAuthService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +18,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/test")
@@ -36,7 +36,7 @@ public class TestController {
         rsiValues.put("1h", BigDecimal.valueOf(26.7));
         rsiValues.put("4h", BigDecimal.valueOf(22.1));
 
-        RsiSignal signal = RsiSignal.builder()
+        RsiSignal signal = Objects.requireNonNull(RsiSignal.builder()
                 .symbol("SOLUSDT")
                 .instrumentName("Solana [TEST]")
                 .signalType(SignalLog.SignalType.OVERSOLD)
@@ -45,7 +45,7 @@ public class TestController {
                 .timeframesAligned(3)
                 .totalTimeframes(3)
                 .signalStrength(BigDecimal.valueOf(7.2))
-                .build();
+                .build());
 
         eventPublisher.publishEvent(new SignalEvent(this, signal));
         return ResponseEntity.ok(Map.of("status", "Test notification dispatched — check Telegram"));
@@ -56,7 +56,7 @@ public class TestController {
             @RequestParam(defaultValue = "volume") String type) {
         AnomalyAlert alert;
         if ("polymarket".equalsIgnoreCase(type)) {
-            alert = AnomalyAlert.builder()
+            alert = Objects.requireNonNull(AnomalyAlert.builder()
                     .type(AnomalyAlert.AnomalyType.POLYMARKET_ODDS_SHIFT)
                     .severity(AnomalyAlert.Severity.HIGH)
                     .market("US tariff announcement [TEST]")
@@ -68,13 +68,13 @@ public class TestController {
                             "shiftPp", 12.5,
                             "windowMinutes", 30
                     ))
-                    .build();
+                    .build());
         } else {
-            alert = AnomalyAlert.builder()
+            alert = Objects.requireNonNull(AnomalyAlert.builder()
                     .type(AnomalyAlert.AnomalyType.VOLUME_SPIKE)
                     .severity(AnomalyAlert.Severity.HIGH)
                     .market("Solana (15m) [TEST]")
-                    .description("Volume spike 4.8\u03c3 above baseline \u2014 Solana 15m [TEST]")
+                    .description("Volume spike 4.8\u03c3 above baseline — Solana 15m [TEST]")
                     .detectedAt(Instant.now())
                     .details(Map.of(
                             "symbol", "SOLUSDT",
@@ -84,7 +84,7 @@ public class TestController {
                             "stdDev", 84000.0,
                             "zScore", 4.8
                     ))
-                    .build();
+                    .build());
         }
         eventPublisher.publishEvent(new AnomalyEvent(this, alert));
         return ResponseEntity.ok(Map.of("status", "Anomaly test alert dispatched (type=" + type + ") — check Telegram"));

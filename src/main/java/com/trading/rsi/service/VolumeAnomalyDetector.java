@@ -87,11 +87,11 @@ public class VolumeAnomalyDetector {
                 AnomalyAlert.Severity severity = zScore >= cfg.getStdDevThreshold() * 1.5
                         ? AnomalyAlert.Severity.CRITICAL : AnomalyAlert.Severity.HIGH;
 
-                AnomalyAlert alert = AnomalyAlert.builder()
+                AnomalyAlert alert = Objects.requireNonNull(AnomalyAlert.builder()
                         .type(AnomalyAlert.AnomalyType.VOLUME_SPIKE)
                         .severity(severity)
                         .market(instrumentName + " (" + timeframe + ")")
-                        .description(String.format("Volume spike %.1f\u03c3 above baseline \u2014 %s %s (%s candle)",
+                        .description(String.format("Volume spike %.1f\u03c3 above baseline — %s %s (%s candle)",
                                 zScore, instrumentName, timeframe, direction))
                         .detectedAt(now)
                         .details(Map.of(
@@ -101,9 +101,9 @@ public class VolumeAnomalyDetector {
                                 "baselineMean", mean,
                                 "stdDev", stdDev,
                                 "zScore", zScore,
-                        "direction", direction
+                                "direction", direction
                         ))
-                        .build();
+                        .build());
 
                 log.warn("VOLUME ANOMALY: {} {} — {}σ (vol={} vs mean={})",
                         symbol, timeframe, String.format("%.1f", zScore),
