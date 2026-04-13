@@ -1,4 +1,4 @@
-# Troubleshooting — RSI Alert Service
+# Troubleshooting — LucidLynx Market Signals
 
 ## Quick Checks for New Agents
 

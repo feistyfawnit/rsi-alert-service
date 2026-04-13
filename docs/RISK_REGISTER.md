@@ -1,4 +1,4 @@
-# RSI Alert Tool — Risk Register & Open Items
+# LucidLynx Market Signals — Risk Register & Open Items
 
 *Last updated: April 2026*
 *Renamed from Windsurf.md — April 2026*

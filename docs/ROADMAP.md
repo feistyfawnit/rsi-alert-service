@@ -1,10 +1,10 @@
-# Phase Completion Status & Next Steps
+# LucidLynx Market Signals — Phase Completion Status & Next Steps
 
-*All phases 1–4 scaffolded in a single session — March 2026*
+*All phases 1–5 scaffolded March–April 2026*
 
 ---
 
-## ✅ Phase 1 — Core RSI Alert Tool — COMPLETE
+## ✅ Phase 1 — Core Multi-Indicator Alert Engine — COMPLETE
 
 - Spring Boot app running in Docker
 - Binance API for crypto (SOL, BTC, ETH, BCH) — live
@@ -101,13 +101,44 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 ---
 
-## Next Actions
+## Prioritised Backlog
 
-1. **Run it** — `docker-compose up -d`, check Telegram (@LucidLynx1_bot), watch signals flow
+> Timelines assume part-time development (~2–4 hrs/week). P1 = do soon, P2 = next sprint, P3 = future.
+
+### 🔴 P1 — High Value, Do Soon (this week / next 2 weeks)
+
+| Item | Effort | Notes |
+|------|--------|-------|
+| ~~**Candle History Persistence (DB)**~~ | ~~4h~~ | ~~`PriceHistoryService` is in-memory only — all history lost on every restart. Affects RSI accuracy directly: 4h RSI needs 28 candles = 4.7 days of data; with persistence, RSI improves continuously over weeks. Without it, every restart resets to bare-minimum accuracy. Also eliminates warmup API calls to Binance on boot. Add `CandleHistory` JPA entity, persist on receipt, load on startup.~~ **COMPLETE — persists to PostgreSQL, loads on startup, eliminates warmup calls.** |
+| **Telegram Bot Commands** | ~3h | Manage the service via Telegram messages instead of curl/API. Commands: `/position BTCUSDT` (set active position → enables anomaly monitoring), `/close` (clear position → disables anomaly monitoring), `/status` (show position, no-trade mode, muted symbols), `/mute BTCUSDT` / `/unmute BTCUSDT`, `/notrade on` / `/notrade off`. Requires a Telegram webhook or polling listener (`TelegramCommandService`) that parses incoming messages and calls `AppSettingsService`. Admin-only — restrict to known chat IDs. |
+| **Momentum Fading Detector** | ~2h | Notify "FAST TF DIVERGENCE — consider taking profit" when 3/3 aligned but fast TFs (1m–15m) flip opposite. No new API calls. Uses existing RSI values. Exit timing signal — replaces manual chart check. |
+| **Deploy to Railway** | ~1h | For 24/7 uptime — especially important once candle history is persisted (no more warmup on laptop wake/restart). |
+| **Enable Claude AI enrichment** | ~30min | Add `CLAUDE_API_KEY` env var — service already built. ~$5/month at current signal frequency. |
+
+### 🟡 P2 — High Value, Medium Effort (2–4 weeks)
+
+| Item | Effort | Notes |
+|------|--------|-------|
+| **Price Momentum Surge Detector** | ~4h | Detects rapid price moves (>0.5% in 15min or >1% in 1h) *before* RSI aligns. Require simultaneous surge across 2+ indices (e.g. S&P + DAX) to filter noise. Bidirectional. Catches institutional flow / news leaks like the April 7 pre-announcement buying. Uses existing candle data — no new API calls. |
+| **Stochastic Confirmation Layer** | ~3h | Add %K (14,3,3) as optional confirmation on RSI signals. Computable from existing OHLC data. See `PROJECT_LOG.md` for proposed logic. |
+| **Self-Service Telegram Onboarding** | ~3h | New users message bot `/start` → admin gets DM *"@username (987654321) requests alerts — /approve 987654321 /reject 987654321"*. Approved IDs hot-reloaded into `TELEGRAM_CHAT_IDS` without restart. Store `PendingSubscriber` in DB with approval audit trail. Eliminates manual `curl getUpdates` step. |
+
+### 🟢 P3 — Lower Priority / Speculative (1–3 months)
+
+| Item | Effort | Notes |
+|------|--------|-------|
+| **Cross-instrument Correlation Detector** | ~6h | Flag when 3+ indices align simultaneously (e.g. DAX + FTSE + S&P all oversold) — stronger signal. Part of Phase 5 spec. |
+| **High Uncertainty Mode Toggle** | ~2h | Suppress all signals except urgent full-alignment when VIX-equivalent is elevated. Part of Phase 5 spec. |
+| **Phase 4 Auto-Trading (enable)** | weeks | Hard-disabled. Requires 3+ months paper trading first. Do not rush. |
+
+---
+
+## Immediate Next Actions
+
+1. ✅ App is running — `make logs` to watch live
 2. **Paper trade** — log every signal manually for 4–8 weeks before trusting Phase 4
-3. **Validate Polymarket slugs** — verify slugs at polymarket.com before deploying (markets expire)
-4. **Deploy to Railway** — once paper trading confirms signals are useful
-5. **Stochastic confirmation layer** — add %K (14,3,3) as optional confirmation on RSI signals; computable from existing OHLC data, no new API calls. See `PROJECT_LOG.md` for proposed logic.
+3. **Deploy to Railway** — for 24/7 uptime (P1 above)
+4. **Add `CLAUDE_API_KEY`** — quick win for richer Telegram messages
 
 ---
 
@@ -117,10 +148,15 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 ---
 
-## Potential Future Work / Backlog
+## Notes
 
-- **Momentum Fading Detector** — When higher timeframes show full RSI alignment (e.g., 3/3 overbought) but lower timeframes (1m–15m) start flipping opposite (oversold), it signals exhaustion of the primary move. This was the exit signal you used today: S&P 3/3 overbought but 1m–15m turning oversold = take profit on short. Formalizing this as a notification ("FAST TF DIVERGENCE — consider taking profit") would provide actionable exit timing without requiring manual chart checks. No new API calls needed — uses in-memory RSI values already calculated.
+**On renaming from "RSI Alert Service":** The tool now incorporates stochastic confirmation, Polymarket geopolitical odds, volume anomaly detection, and Claude AI enrichment — RSI is one of many signals, not the only one. Consider renaming to `market-alert-service` or `signal-alert-service` when deploying to Railway. No urgency — it's a private repo and the name doesn't affect functionality.
 
-- **Price Momentum Surge Detector** — Detects rapid price moves (>0.5% in 15min or >1% in 1h) *before* RSI aligns across timeframes. Unlike the volume anomaly detector, this watches percentage change speed, not volume. Key feature: require simultaneous surge across 2+ indices (S&P + DAX) to filter single-market noise. Use case: the April 7 pre-announcement buying (5–6pm UTC) where price surged on moderate volume, well before RSI 3/3 alignment and hours before Trump's 8pm statement. Bidirectional (surge up = possible news leak/institutional flow; surge down = risk-off event). Uses existing 15m candle data — no extra API calls, no 1m TF needed.
+**On Claude vs. alternative AI models:** Claude Haiku (~$5/month at current frequency) is the current choice. Alternatives worth evaluating:
+- **Gemini Flash (Google)** — cheaper than Haiku, comparable quality for structured tasks, free tier available
+- **DeepSeek-R1 / V3** — significantly cheaper, strong reasoning, hosted API available (or self-host via Ollama locally for zero cost)
+- **GPT-4o-mini (OpenAI)** — competitive pricing, well-documented
+- **Windsurf/Copilot** — IDE-only tools, not suitable for server-side enrichment
+- The `ClaudeEnrichmentService` is the only class to change — all others call it via interface. Swapping models is low-effort once a provider is chosen.
 
 *Ivan T & Brian H — Private Use — Not for Distribution*

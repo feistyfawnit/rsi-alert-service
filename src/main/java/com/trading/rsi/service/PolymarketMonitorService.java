@@ -26,6 +26,7 @@ public class PolymarketMonitorService {
     private final ApplicationEventPublisher eventPublisher;
     private final AnomalyProperties anomalyProperties;
     private final PolymarketDiscoveryService discoveryService;
+    private final AppSettingsService appSettingsService;
 
     private static final String POLYMARKET_API = "https://gamma-api.polymarket.com";
 
@@ -36,6 +37,12 @@ public class PolymarketMonitorService {
     public void pollPolymarketOdds() {
         AnomalyProperties.PolymarketConfig cfg = anomalyProperties.getPolymarket();
         if (!anomalyProperties.isEnabled() || !cfg.isEnabled()) {
+            return;
+        }
+
+        String activePosition = appSettingsService.get(AppSettingsService.KEY_ACTIVE_POSITION, "");
+        if (activePosition.isBlank()) {
+            log.debug("Polymarket polling skipped — no active position");
             return;
         }
 
@@ -155,9 +162,9 @@ public class PolymarketMonitorService {
                 AnomalyAlert alert = Objects.requireNonNull(AnomalyAlert.builder()
                         .type(AnomalyAlert.AnomalyType.POLYMARKET_ODDS_SHIFT)
                         .severity(severity)
-                        .market(name)
-                        .description(String.format("Prediction market: %.1fpp %s shift in %dmin — %s",
-                                shiftPp, directionArrow, windowMinutes, name))
+                        .market("Polymarket: " + name)
+                        .description(String.format("%.1fpp %s shift in %dmin — YES probability now %.1f%%",
+                                shiftPp, directionArrow, windowMinutes, yesProbabilityPct.doubleValue()))
                         .detectedAt(now)
                         .details(Map.of(
                                 "slug", slug,

@@ -1,4 +1,4 @@
-# API Reference
+# LucidLynx Market Signals — API Reference
 
 *Last updated: April 2026*
 

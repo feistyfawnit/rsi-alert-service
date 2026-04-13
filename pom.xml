@@ -15,8 +15,8 @@
     <groupId>com.trading</groupId>
     <artifactId>rsi-alert-service</artifactId>
     <version>0.1.0</version>
-    <name>rsi-alert-service</name>
-    <description>RSI Multi-Timeframe Trading Alert Tool</description>
+    <name>LucidLynx Market Signals</name>
+    <description>Multi-indicator market alert service with RSI, Stochastic, anomaly detection, and Polymarket geopolitical monitoring</description>
     
     <properties>
         <java.version>25</java.version>
@@ -76,6 +76,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
         

@@ -1,6 +1,6 @@
-# RSI Multi-Timeframe Trading Alert Tool
+# LucidLynx Market Signals
 
-A production-grade Spring Boot service that monitors financial instruments for RSI alignment signals across multiple timeframes and sends instant push notifications. Monitors crypto (via Binance), indices and commodities (via IG API) in real time.
+A production-grade Spring Boot service that monitors financial instruments for multi-indicator alignment signals across multiple timeframes and sends instant push notifications. Combines RSI, Stochastic, volume anomalies, and geopolitical event monitoring (via Polymarket). Monitors crypto (via Binance), indices and commodities (via IG API) in real time.
 
 **Repository:** `https://github.com/feistyfawnit/rsi-alert-service` (Private)
 
@@ -65,17 +65,15 @@ The app will be available at `http://localhost:8080`
 Alerts are delivered privately via the **B&I Alert Bot** (@LucidLynx1_bot) on Telegram.
 
 **To add a new recipient:**
-1. Open Telegram and search **@LucidLynx1_bot** — tap **START**
-2. Get your chat ID:
-   ```bash
-   curl https://api.telegram.org/bot{TOKEN}/getUpdates
-   # Look for "chat":{"id":XXXXXXX} in the response
-   ```
-3. Add your ID to `TELEGRAM_CHAT_IDS` in `.env` (comma-separated for multiple):
+1. In Telegram, search **@userinfobot** and send it any message — it replies with your numeric chat ID (e.g. `Id: 987654321`)
+2. Search **@LucidLynx1_bot** and tap **START** (so the bot can message you)
+3. Send your chat ID to an admin — he adds it to `.env`:
    ```
    TELEGRAM_CHAT_IDS=6633143916,987654321
    ```
-4. Rebuild: `docker-compose up -d --build`
+4. Restart: `docker-compose up -d --build`
+
+> ⚠️ **Note:** Self-service onboarding (no admin step needed) is planned — see ROADMAP.
 
 ## API Endpoints
 

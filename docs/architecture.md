@@ -1,4 +1,4 @@
-# Architecture
+# LucidLynx Market Signals — Architecture
 
 *Last updated: April 2026*
 
@@ -6,7 +6,7 @@
 
 ## System Overview
 
-Spring Boot service that polls market data APIs on a scheduled interval, calculates RSI across multiple timeframes per instrument, detects alignment signals, and pushes notifications. Runs in Docker with PostgreSQL for persistence.
+Spring Boot service that polls market data APIs on a scheduled interval, calculates RSI, Stochastic, and volume anomalies across multiple timeframes per instrument, detects alignment signals, monitors Polymarket for geopolitical events, and pushes notifications. Runs in Docker with PostgreSQL for persistence.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -26,7 +26,7 @@ Spring Boot service that polls market data APIs on a scheduled interval, calcula
 │  ┌───────────────┐  ┌─────────────┐   ┌──────────────┐     │
 │  │ Notification  │  │ IG Trading  │   │ Signal       │     │
 │  │ Service       │  │ Service     │   │ Logger       │     │
-│  │ (ntfy.sh)     │  │ (Phase 4)   │   │ (Postgres)   │     │
+│  │  (Telegram)    │  │ (Phase 4)   │   │ (Postgres)   │     │
 │  └───────┬───────┘  └─────────────┘   └──────────────┘     │
 │          │                                                  │
 │  ┌───────▼───────┐  ┌─────────────────────────────┐        │
@@ -66,7 +66,7 @@ Spring Boot service that polls market data APIs on a scheduled interval, calcula
 - **`MarketDataService`** — polls Binance and IG APIs every 60s, fetches OHLC candles per instrument per timeframe
 - **`RSICalculatorService`** — Wilder's smoothing RSI (period=14) from close prices; maintains in-memory candle history
 - **`SignalDetectorService`** — evaluates RSI alignment across configured timeframes; emits FULL, PARTIAL, or WATCH signals
-- **`NotificationService`** — formats and sends alerts to ntfy.sh; handles quiet hours, cooldown, no-trade mode, weekend suppression, per-signal-type priority levels
+- **`NotificationService`** — formats and sends alerts via Telegram; handles quiet hours, cooldown, no-trade mode, weekend suppression, per-signal-type priority levels
 
 ### Signal Monitoring
 
@@ -109,7 +109,7 @@ Instruments are seeded from `application.yml` on startup via `DataInitializer` a
 
 ## Signal Hierarchy
 
-| Priority | Signal | Condition | ntfy priority |
+| Priority | Signal | Condition | Priority |
 |---|---|---|---|
 | 1 | OVERSOLD / OVERBOUGHT | All TFs aligned | urgent (5) — bypasses DND |
 | 2 | PARTIAL | All but 1 TF aligned | default (3) |
@@ -125,7 +125,7 @@ Instruments are seeded from `application.yml` on startup via `DataInitializer` a
 | Language | Java 25 |
 | Database | PostgreSQL 16 |
 | HTTP Client | Spring WebFlux (reactive) |
-| Notifications | ntfy.sh (HTTP POST) |
+| Notifications | Telegram Bot API |
 | AI | Claude API (Anthropic) — optional |
 | Build | Maven |
 | Container | Docker + docker-compose |

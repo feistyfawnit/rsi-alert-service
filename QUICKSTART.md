@@ -1,4 +1,4 @@
-# Quick Start & Demo Guide
+# Quick Start & Demo Guide — LucidLynx Market Signals
 
 > **Prerequisite (macOS with Colima):** Start Docker runtime first  
 > `colima start`
@@ -6,14 +6,15 @@
 ## Step 1: Start the Application
 
 ```bash
-cp .env.example .env          # edit NTFY_TOPIC if you want a private topic
+cp .env.example .env          # edit TELEGRAM_CHAT_IDS for private notifications
 make up                       # starts Colima if needed, builds & runs app
 ```
 
 ## Step 2: Subscribe to Notifications
 
-**Phone:** Install **ntfy** app → add topic `rsi-alerts` (or your custom topic from `.env`)  
-**Browser:** https://ntfy.sh/rsi-alerts
+**For recipients:** Message **@LucidLynx1_bot** (the B&I Alert Bot) and send `/start`, then tell the admin you've done so.
+
+**For admin:** After they message the bot, get their chat ID from `getUpdates` and add to `TELEGRAM_CHAT_IDS` in `.env` (comma-separated)
 
 ## Step 3: Verify It's Working
 
@@ -101,7 +102,7 @@ docker-compose logs app
 **No signals after an hour?**
 - RSI alignment across 3 timeframes is rare — can take 6–48h on quiet market days
 - Check logs for `Updated SOLUSDT` messages to confirm polling is working
-- Use `POST /api/test/notify` to confirm ntfy delivery works independently
+- Use `POST /api/test/notify` to confirm Telegram delivery works independently
 
 **Wipe DB and restart fresh:**
 ```bash

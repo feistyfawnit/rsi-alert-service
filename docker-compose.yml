@@ -1,9 +1,9 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: rsi-postgres
+    container_name: market-signals-postgres
     environment:
-      POSTGRES_DB: rsi_alerts
+      POSTGRES_DB: market_signals
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -18,12 +18,12 @@ services:
 
   app:
     build: .
-    container_name: rsi-alert-service
+    container_name: market-signals-service
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: jdbc:postgresql://postgres:5432/rsi_alerts
+      DATABASE_URL: jdbc:postgresql://postgres:5432/market_signals
       DATABASE_USER: postgres
       DATABASE_PASSWORD: postgres
       TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}

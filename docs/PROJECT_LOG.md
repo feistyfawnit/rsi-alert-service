@@ -1,6 +1,6 @@
-# Project Log — RSI Alert Service
+# Project Log — LucidLynx Market Signals
 
-*Local only — do not commit to rsi-alert-service repo*
+*Local only — do not commit to market-signals repo*
 *Renamed from signal-strategy-notes.md — April 2026*
 *Last updated: April 2026*
 

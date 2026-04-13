@@ -1,12 +1,12 @@
-# RSI Multi-Timeframe Trading Alert Tool
-**Project Requirements Specification**  
-Private Use Only | March 2026
+# LucidLynx Market Signals — Requirements Specification
+**Multi-indicator trading alert platform**  
+Private Use Only | March–April 2026
 
 ---
 
 ## 1. Project Overview
 
-Private Spring Boot service automating RSI multi-timeframe scanning for Ivan and Brian. Monitors indices, crypto, FX, and commodities; detects RSI alignment signals across timeframes; sends instant push notifications — faster than manual scanning, without fatigue.
+Private Spring Boot service automating multi-indicator market scanning for Ivan and Brian. Monitors indices, crypto, FX, and commodities; detects RSI alignment signals across timeframes; sends instant push notifications — faster than manual scanning, without fatigue.
 
 - Target: ~18–20% p.a., retaining ~75–80% capital reserve
 - Strategy: RSI alignment across 4hr, 1hr, 5min, 1min — all oversold (<30) = buy, all overbought (>70) = sell/exit

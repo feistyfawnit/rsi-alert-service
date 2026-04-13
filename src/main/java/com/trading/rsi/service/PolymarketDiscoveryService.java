@@ -84,17 +84,11 @@ public class PolymarketDiscoveryService {
     private List<DiscoveredMarket> fetchMarketsByTags(List<String> tags, Set<String> excluded, int limit) {
         WebClient client = webClientBuilder.baseUrl(POLYMARKET_API).build();
 
-        // Fetch active markets with liquidity filter
-        // API: /markets?active=true&liquidityMin=5000&volumeMin=10000&sort=volume&order=desc
         return client.get()
             .uri(uriBuilder -> uriBuilder
                 .path("/markets")
                 .queryParam("active", "true")
-                .queryParam("liquidityMin", "5000")
-                .queryParam("volumeMin", "10000")
-                .queryParam("sort", "volume")
-                .queryParam("order", "desc")
-                .queryParam("limit", Math.min(limit * 2, 50)) // Fetch extra for filtering
+                .queryParam("limit", Math.min(limit * 2, 50)) // Fetch extra for client-side filtering
                 .build())
             .retrieve()
             .bodyToFlux(Map.class)
