@@ -29,9 +29,6 @@ public class TestController {
     private final InstrumentRepository instrumentRepository;
     private final IGAuthService igAuthService;
 
-    @Value("${notifications.ntfy.topic:rsi-alerts}")
-    private String ntfyTopic;
-
     @PostMapping("/notify")
     public ResponseEntity<Map<String, String>> triggerTestNotification() {
         Map<String, BigDecimal> rsiValues = new LinkedHashMap<>();
@@ -51,10 +48,7 @@ public class TestController {
                 .build();
 
         eventPublisher.publishEvent(new SignalEvent(this, signal));
-        return ResponseEntity.ok(Map.of(
-                "status", "Test notification dispatched",
-                "check", "https://ntfy.sh/" + ntfyTopic
-        ));
+        return ResponseEntity.ok(Map.of("status", "Test notification dispatched — check Telegram"));
     }
 
     @PostMapping("/anomaly")
@@ -93,10 +87,7 @@ public class TestController {
                     .build();
         }
         eventPublisher.publishEvent(new AnomalyEvent(this, alert));
-        return ResponseEntity.ok(Map.of(
-                "status", "Anomaly test alert dispatched (type=" + type + ")",
-                "check", "https://ntfy.sh/" + ntfyTopic
-        ));
+        return ResponseEntity.ok(Map.of("status", "Anomaly test alert dispatched (type=" + type + ") — check Telegram"));
     }
 
     @PostMapping("/lower-thresholds")

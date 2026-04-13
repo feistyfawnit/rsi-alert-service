@@ -27,7 +27,6 @@ public class PolymarketDiscoveryService {
     private final WebClient.Builder webClientBuilder;
 
     private static final String POLYMARKET_API = "https://gamma-api.polymarket.com";
-    private static final String POLYMARKET_CLOB = "https://clob.polymarket.com";
 
     // Cache discovered markets for 1 hour to reduce API calls
     private final Map<String, DiscoveredMarket> marketCache = new ConcurrentHashMap<>();

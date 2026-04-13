@@ -9,13 +9,14 @@ A production-grade Spring Boot service that monitors financial instruments for R
 - ✅ Real-time RSI calculation across multiple timeframes (15m, 30m, 1h, 4h — configurable per instrument)
 - ✅ Multi-instrument support (crypto via Binance, indices/commodities via IG API)
 - ✅ Three-tier signal hierarchy: FULL → PARTIAL → WATCH
-- ✅ Instant push notifications via ntfy.sh (per-signal-type priority levels)
+- ✅ Private push notifications via Telegram bot (multi-recipient, no app install needed)
 - ✅ Partial signal monitoring with lagging-TF follow-ups
-- ✅ No-trade mode toggle for bank holidays / downtime
+- ✅ No-trade mode + per-symbol muting (persistent across restarts via DB)
+- ✅ Active position tracking — gates anomaly alerts until a trade is open
 - ✅ Volume anomaly detection (σ-based) + Polymarket geopolitical odds monitor
 - ✅ Claude AI signal enrichment (optional)
 - ✅ Signal CSV archival with outcome backfill (1h/4h/24h price tracking)
-- ✅ REST API for instruments, signals, retrospective analysis
+- ✅ REST API for instruments, signals, settings, retrospective analysis
 - ✅ Auto-trading scaffolded (Phase 4 — hard-disabled, requires demo validation)
 
 ## Tech Stack
@@ -35,10 +36,13 @@ A production-grade Spring Boot service that monitors financial instruments for R
 
 ### 2. Configuration
 
+Copy `.env.example` to `.env` and fill in your values. See comments in `.env.example` for each variable.
+
+Key settings for notifications:
 ```bash
-# Environment already configured:
-# FINNHUB_API_KEY=your_api_key_here  (free tier - indices/stocks require paid plan)
-# NTFY_TOPIC=rsi-alerts  ✓ Default
+TELEGRAM_ENABLED=true
+TELEGRAM_BOT_TOKEN=your_bot_token_from_botfather
+TELEGRAM_CHAT_IDS=your_chat_id          # comma-separate for multiple recipients
 ```
 
 ### 3. Run with Docker Compose
@@ -56,14 +60,22 @@ docker-compose down
 
 The app will be available at `http://localhost:8080`
 
-### 4. Subscribe to Alerts
+### 4. Receive Alerts via Telegram
 
-**Mobile (iOS/Android):**
-1. Install ntfy app from App Store or Play Store
-2. Subscribe to topic: `rsi-alerts` (or your custom topic from .env)
+Alerts are delivered privately via the **B&I Alert Bot** (@LucidLynx1_bot) on Telegram.
 
-**Web:**
-- Visit https://ntfy.sh/rsi-alerts in your browser
+**To add a new recipient:**
+1. Open Telegram and search **@LucidLynx1_bot** — tap **START**
+2. Get your chat ID:
+   ```bash
+   curl https://api.telegram.org/bot{TOKEN}/getUpdates
+   # Look for "chat":{"id":XXXXXXX} in the response
+   ```
+3. Add your ID to `TELEGRAM_CHAT_IDS` in `.env` (comma-separated for multiple):
+   ```
+   TELEGRAM_CHAT_IDS=6633143916,987654321
+   ```
+4. Rebuild: `docker-compose up -d --build`
 
 ## API Endpoints
 

@@ -8,8 +8,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
 
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -19,17 +17,8 @@ import java.time.ZonedDateTime;
 @RequiredArgsConstructor
 public class AnomalyNotificationService {
 
-    private final WebClient.Builder webClientBuilder;
     private final AppSettingsService appSettingsService;
-
-    @Value("${notifications.ntfy.enabled:true}")
-    private boolean ntfyEnabled;
-
-    @Value("${notifications.ntfy.topic:rsi-alerts}")
-    private String ntfyTopic;
-
-    @Value("${notifications.ntfy.server-url:https://ntfy.sh}")
-    private String ntfyServerUrl;
+    private final TelegramNotificationService telegramNotificationService;
 
     @Value("${rsi.quiet-hours.enabled:true}")
     private boolean quietHoursEnabled;
@@ -43,7 +32,6 @@ public class AnomalyNotificationService {
     @EventListener
     @Async
     public void handleAnomalyEvent(AnomalyEvent event) {
-        if (!ntfyEnabled) return;
         AnomalyAlert alert = event.getAlert();
         String activePosition = appSettingsService.get(AppSettingsService.KEY_ACTIVE_POSITION, "");
         if (activePosition == null || activePosition.isBlank()) {
@@ -75,20 +63,7 @@ public class AnomalyNotificationService {
     private void sendUrgentAlert(AnomalyAlert alert) {
         String title = buildTitle(alert);
         String message = buildMessage(alert);
-
-        webClientBuilder.baseUrl(ntfyServerUrl).build()
-                .post()
-                .uri("/" + ntfyTopic)
-                .header("Title", title)
-                .header("Priority", "urgent")
-                .header("Tags", "rotating_light,warning,no_entry")
-                .bodyValue(message)
-                .retrieve()
-                .bodyToMono(String.class)
-                .doOnSuccess(r -> log.info("Anomaly alert sent: {}", alert.getDescription()))
-                .doOnError(e -> log.error("Failed to send anomaly alert: {}", e.getMessage()))
-                .onErrorResume(e -> Mono.empty())
-                .subscribe();
+        telegramNotificationService.send(title, message);
     }
 
     private String buildTitle(AnomalyAlert alert) {

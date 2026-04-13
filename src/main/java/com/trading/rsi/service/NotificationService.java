@@ -10,8 +10,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
 
 import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
@@ -29,21 +27,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 public class NotificationService {
     
-    private final WebClient.Builder webClientBuilder;
     private final ClaudeEnrichmentService claudeEnrichmentService;
     private final AppSettingsService appSettingsService;
-    
-    @Value("${notifications.ntfy.enabled:true}")
-    private boolean ntfyEnabled;
-    
-    @Value("${notifications.ntfy.topic:rsi-alerts}")
-    private String ntfyTopic;
-    
-    @Value("${notifications.ntfy.server-url:https://ntfy.sh}")
-    private String ntfyServerUrl;
-    
-    @Value("${notifications.ntfy.priority:high}")
-    private String ntfyPriority;
+    private final TelegramNotificationService telegramNotificationService;
 
     private final AtomicBoolean noTradeModeActive = new AtomicBoolean(false);
     private final Set<String> mutedSymbols = ConcurrentHashMap.newKeySet();
@@ -90,10 +76,6 @@ public class NotificationService {
     @EventListener
     @Async
     public void handleSignalEvent(SignalEvent event) {
-        if (!ntfyEnabled) {
-            log.debug("Notifications disabled, skipping alert");
-            return;
-        }
         
         RsiSignal signal = event.getSignal();
         boolean isFullSignal = signal.getTimeframesAligned() >= signal.getTotalTimeframes();
@@ -121,7 +103,7 @@ public class NotificationService {
         }
         
         String aiContext = claudeEnrichmentService.enrichSignal(signal);
-        sendNtfyNotification(signal, aiContext, priorityForSignal(signal.getSignalType()));
+        sendNotification(signal, aiContext);
     }
     
     public void enableNoTradeMode() {
@@ -156,32 +138,10 @@ public class NotificationService {
         return Set.copyOf(mutedSymbols);
     }
 
-    private String priorityForSignal(SignalLog.SignalType signalType) {
-        return switch (signalType) {
-            case OVERSOLD, OVERBOUGHT -> "urgent";
-            case PARTIAL_OVERSOLD, PARTIAL_OVERBOUGHT -> "default";
-            case WATCH_OVERSOLD, WATCH_OVERBOUGHT -> "low";
-        };
-    }
-
-    private void sendNtfyNotification(RsiSignal signal, String aiContext, String priority) {
+    private void sendNotification(RsiSignal signal, String aiContext) {
         String title = buildNotificationTitle(signal);
         String message = buildNotificationMessage(signal, aiContext);
-        
-        WebClient client = webClientBuilder.baseUrl(ntfyServerUrl).build();
-        
-        client.post()
-                .uri("/" + ntfyTopic)
-                .header("Title", title)
-                .header("Priority", priority)
-                .header("Tags", getTagsForSignal(signal))
-                .bodyValue(message)
-                .retrieve()
-                .bodyToMono(String.class)
-                .doOnSuccess(response -> log.info("Notification sent for {} {}", signal.getSymbol(), signal.getSignalType()))
-                .doOnError(error -> log.error("Failed to send notification: {}", error.getMessage()))
-                .onErrorResume(e -> Mono.empty())
-                .subscribe();
+        telegramNotificationService.send(title, message);
     }
     
     private String buildNotificationTitle(RsiSignal signal) {
@@ -331,21 +291,7 @@ public class NotificationService {
     }
     
     public void sendRawNotification(String title, String message, String priority, String tags) {
-        if (!ntfyEnabled) return;
-
-        WebClient client = webClientBuilder.baseUrl(ntfyServerUrl).build();
-        client.post()
-                .uri("/" + ntfyTopic)
-                .header("Title", title)
-                .header("Priority", priority)
-                .header("Tags", tags)
-                .bodyValue(message)
-                .retrieve()
-                .bodyToMono(String.class)
-                .doOnSuccess(r -> log.info("Notification sent: {}", title))
-                .doOnError(e -> log.error("Failed to send notification '{}': {}", title, e.getMessage()))
-                .onErrorResume(e -> Mono.empty())
-                .subscribe();
+        telegramNotificationService.send(title, message);
     }
 
     private String getTagsForSignal(RsiSignal signal) {

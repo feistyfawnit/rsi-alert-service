@@ -16,22 +16,23 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AppSettingsService {
 
-    static final String KEY_NO_TRADE_MODE   = "no_trade_mode";
-    static final String KEY_MUTED_SYMBOLS   = "muted_symbols";
-    static final String KEY_ACTIVE_POSITION = "active_position";
+    public static final String KEY_NO_TRADE_MODE   = "no_trade_mode";
+    public static final String KEY_MUTED_SYMBOLS   = "muted_symbols";
+    public static final String KEY_ACTIVE_POSITION = "active_position";
 
     private final AppSettingRepository repository;
 
     public String get(String key, String defaultValue) {
-        return repository.findById(key)
+        String val = repository.findById(key)
                 .map(AppSetting::getValue)
-                .orElse(defaultValue);
+                .orElse(null);
+        return val != null ? val : defaultValue;
     }
 
     public boolean getBoolean(String key, boolean defaultValue) {
-        String val = get(key, null);
-        if (val == null) return defaultValue;
-        return Boolean.parseBoolean(val);
+        return repository.findById(key)
+                .map(s -> Boolean.parseBoolean(s.getValue()))
+                .orElse(defaultValue);
     }
 
     public Set<String> getStringSet(String key) {

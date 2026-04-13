@@ -26,7 +26,9 @@ services:
       DATABASE_URL: jdbc:postgresql://postgres:5432/rsi_alerts
       DATABASE_USER: postgres
       DATABASE_PASSWORD: postgres
-      NTFY_TOPIC: ${NTFY_TOPIC:-rsi-alerts}
+      TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_IDS: ${TELEGRAM_CHAT_IDS:-}
       FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
       IG_ENABLED: ${IG_ENABLED:-false}
       IG_API_KEY: ${IG_API_KEY:-}

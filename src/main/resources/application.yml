@@ -98,11 +98,10 @@ trading:
     require-manual-approval: ${TRADING_REQUIRE_MANUAL_APPROVAL:true}
 
 notifications:
-  ntfy:
-    enabled: true
-    topic: ${NTFY_TOPIC:rsi-alerts}
-    server-url: https://ntfy.sh
-    priority: high
+  telegram:
+    enabled: ${TELEGRAM_ENABLED:false}
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    chat-ids: ${TELEGRAM_CHAT_IDS:}
     
   email:
     enabled: false
