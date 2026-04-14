@@ -43,7 +43,9 @@ public class SignalLogService {
         log.info("Signal logged: {} {} at ${}", signal.getSymbol(), signal.getSignalType(), signal.getCurrentPrice());
 
         boolean isFullSignal = signal.getSignalType() == SignalLog.SignalType.OVERSOLD
-                || signal.getSignalType() == SignalLog.SignalType.OVERBOUGHT;
+                || signal.getSignalType() == SignalLog.SignalType.OVERBOUGHT
+                || signal.getSignalType() == SignalLog.SignalType.TREND_BUY_DIP
+                || signal.getSignalType() == SignalLog.SignalType.TREND_SELL_RALLY;
         if (isFullSignal) {
             String current = appSettingsService.get(AppSettingsService.KEY_ACTIVE_POSITION, "");
             if (current == null || current.isBlank()) {

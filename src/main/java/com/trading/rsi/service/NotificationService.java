@@ -30,6 +30,7 @@ public class NotificationService {
     private final ClaudeEnrichmentService claudeEnrichmentService;
     private final AppSettingsService appSettingsService;
     private final TelegramNotificationService telegramNotificationService;
+    private final TrendDetectionService trendDetectionService;
 
     private final AtomicBoolean noTradeModeActive = new AtomicBoolean(false);
     private final Set<String> mutedSymbols = ConcurrentHashMap.newKeySet();
@@ -152,6 +153,8 @@ public class NotificationService {
             case PARTIAL_OVERBOUGHT -> "🟠";
             case WATCH_OVERSOLD -> "👀";
             case WATCH_OVERBOUGHT -> "👀";
+            case TREND_BUY_DIP -> "📈";
+            case TREND_SELL_RALLY -> "📉";
         };
         
         String signalName = switch (signal.getSignalType()) {
@@ -161,6 +164,8 @@ public class NotificationService {
             case PARTIAL_OVERBOUGHT -> "Partial Sell";
             case WATCH_OVERSOLD -> "WATCH Buy";
             case WATCH_OVERBOUGHT -> "WATCH Sell";
+            case TREND_BUY_DIP -> "TREND BUY (Dip)";
+            case TREND_SELL_RALLY -> "TREND SELL (Rally)";
         };
         
         return emoji + " " + signal.getInstrumentName() + " " + signalName;
@@ -205,7 +210,21 @@ public class NotificationService {
             case PARTIAL_OVERBOUGHT -> "Watch for full alignment - potential SHORT/EXIT";
             case WATCH_OVERSOLD -> "1 TF oversold + others approaching — check chart for entry";
             case WATCH_OVERBOUGHT -> "1 TF overbought + others approaching — check chart for exit";
+            case TREND_BUY_DIP -> "BUY THE DIP — Strong uptrend, RSI pulled back. Go LONG with tight stop.";
+            case TREND_SELL_RALLY -> "SELL THE RALLY — Strong downtrend, RSI bounced. Go SHORT with tight stop.";
         });
+
+        // Add trend context if in a strong trend
+        TrendDetectionService.TrendState trendState = trendDetectionService.getTrendState(signal.getSymbol());
+        if (trendState != TrendDetectionService.TrendState.NEUTRAL) {
+            int count = trendState == TrendDetectionService.TrendState.STRONG_UPTREND
+                    ? trendDetectionService.getConsecutiveOverboughtCount(signal.getSymbol())
+                    : trendDetectionService.getConsecutiveOversoldCount(signal.getSymbol());
+            String trendEmoji = trendState == TrendDetectionService.TrendState.STRONG_UPTREND ? "🐂" : "🐻";
+            message.append("\n").append(trendEmoji).append(" Trend: ")
+                   .append(trendState == TrendDetectionService.TrendState.STRONG_UPTREND ? "STRONG UPTREND" : "STRONG DOWNTREND")
+                   .append(" (").append(count).append(" consecutive signals)");
+        }
 
         boolean isPartial = signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD
                 || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERBOUGHT;
@@ -239,15 +258,20 @@ public class NotificationService {
     private String buildDemoGuidance(RsiSignal signal) {
         double stopPct = inferStopPercent(signal.getSymbol());
         boolean isLong = signal.getSignalType() == SignalLog.SignalType.OVERSOLD
-                || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD;
+                || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD
+                || signal.getSignalType() == SignalLog.SignalType.TREND_BUY_DIP;
         boolean isPartial = signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD
                 || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERBOUGHT;
         boolean isCrypto = !signal.getSymbol().startsWith("IX.") && !signal.getSymbol().startsWith("CS.")
                 && !signal.getSymbol().startsWith("CC.");
+        boolean isTrendSignal = signal.getSignalType() == SignalLog.SignalType.TREND_BUY_DIP
+                || signal.getSignalType() == SignalLog.SignalType.TREND_SELL_RALLY;
 
         BigDecimal entry = signal.getCurrentPrice();
-        long stopPts = Math.round(entry.doubleValue() * stopPct / 100.0);
-        long limitPts = stopPts * 2;
+        // Trend signals use tighter stops (half normal) since entering with the trend
+        double effectiveStopPct = isTrendSignal ? stopPct * 0.5 : stopPct;
+        long stopPts = Math.round(entry.doubleValue() * effectiveStopPct / 100.0);
+        long limitPts = isTrendSignal ? stopPts * 3 : stopPts * 2; // 3:1 R:R for trend trades
 
         BigDecimal riskAmount = BigDecimal.valueOf(demoAccountBalance)
                 .multiply(BigDecimal.valueOf(demoRiskPercent / 100.0))
@@ -266,14 +290,16 @@ public class NotificationService {
         } else {
             sb.append("Direction: ").append(direction).append("\n");
         }
+        String rrLabel = isTrendSignal ? "3:1" : "2:1";
+        double rrMultiplier = isTrendSignal ? 3.0 : 2.0;
         sb.append("Size: ").append(sizePerPoint).append(" ").append(accountCurrency)
           .append("/pt (max loss ").append(accountCurrency).append(" ").append(riskAmount.toPlainString()).append(")\n");
-        sb.append("Stop: ").append(stopPts).append(" pts away (").append(stopPct)
+        sb.append("Stop: ").append(stopPts).append(" pts away (").append(String.format("%.2f", effectiveStopPct))
           .append(isLong ? "% below entry" : "% above entry").append(")\n");
-        sb.append("Limit: ").append(limitPts).append(" pts away (2:1 — profit ").append(accountCurrency)
-          .append(" ").append(riskAmount.multiply(java.math.BigDecimal.valueOf(2)).toPlainString()).append(")\n");
+        sb.append("Limit: ").append(limitPts).append(" pts away (").append(rrLabel).append(" — profit ").append(accountCurrency)
+          .append(" ").append(riskAmount.multiply(java.math.BigDecimal.valueOf(rrMultiplier)).toPlainString()).append(")\n");
         if (isCrypto) {
-            sb.append("[Binance price — adjust pts if IG entry differs: stop = IG entry × ").append(stopPct).append("%]\n");
+            sb.append("[Binance price — adjust pts if IG entry differs: stop = IG entry × ").append(String.format("%.2f", effectiveStopPct)).append("%]\n");
         }
         if (isPartial) {
             sb.append("⏳ Wait for ").append(signal.getTotalTimeframes()).append("/")

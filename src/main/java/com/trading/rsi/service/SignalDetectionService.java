@@ -32,6 +32,7 @@ public class SignalDetectionService {
     private final ApplicationEventPublisher eventPublisher;
     private final SignalCooldownService cooldownService;
     private final PartialSignalMonitorService partialSignalMonitorService;
+    private final TrendDetectionService trendDetectionService;
     
     @Value("${rsi.period:14}")
     private int rsiPeriod;
@@ -107,6 +108,9 @@ public class SignalDetectionService {
         
         detectSignals(instrument, rsiValues, currentPrice, timeframes, triggerCandle);
 
+        // Check for trend-following entries (buy-the-dip / sell-the-rally)
+        trendDetectionService.checkForTrendEntry(instrument, rsiValues, currentPrice, triggerCandle);
+
         // Update active partial monitoring on every poll cycle
         partialSignalMonitorService.updatePartials(instrument.getSymbol(), rsiValues);
     }
@@ -173,6 +177,19 @@ public class SignalDetectionService {
         
         if (signalType != null && cooldownService.shouldAlert(instrument.getSymbol(), signalType)) {
             boolean isFullSignal = alignedCount >= totalTimeframes;
+
+            // Record full signals for trend tracking
+            if (isFullSignal) {
+                trendDetectionService.recordSignal(instrument.getSymbol(), signalType);
+            }
+
+            // Suppress counter-trend signals in strong trends
+            if (isFullSignal && trendDetectionService.shouldSuppressCounterTrend(instrument.getSymbol(), signalType)) {
+                log.info("Counter-trend {} suppressed for {} — trend override active",
+                        signalType, instrument.getName());
+                return;
+            }
+
             Map<String, StochasticResult> stochasticValues = isFullSignal
                     ? calculateStochastics(instrument, timeframeList)
                     : null;

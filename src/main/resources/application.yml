@@ -61,6 +61,15 @@ rsi:
     stop-percent-index: 0.5
     stop-percent-commodity: 1.0
     
+  trend:
+    consecutive-signals-for-trend: ${TREND_CONSECUTIVE_SIGNALS:3}
+    dip-rsi-upper: ${TREND_DIP_RSI_UPPER:55}
+    dip-rsi-lower: ${TREND_DIP_RSI_LOWER:40}
+    rally-rsi-upper: ${TREND_RALLY_RSI_UPPER:60}
+    rally-rsi-lower: ${TREND_RALLY_RSI_LOWER:45}
+    trend-timeout-hours: ${TREND_TIMEOUT_HOURS:12}
+    suppress-counter-trend: ${TREND_SUPPRESS_COUNTER:true}
+
   timeframes:
     - 1m
     - 5m

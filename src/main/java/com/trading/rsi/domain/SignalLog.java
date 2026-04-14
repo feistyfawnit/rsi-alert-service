@@ -72,6 +72,8 @@ public class SignalLog {
         PARTIAL_OVERSOLD,
         PARTIAL_OVERBOUGHT,
         WATCH_OVERSOLD,
-        WATCH_OVERBOUGHT
+        WATCH_OVERBOUGHT,
+        TREND_BUY_DIP,
+        TREND_SELL_RALLY
     }
 }

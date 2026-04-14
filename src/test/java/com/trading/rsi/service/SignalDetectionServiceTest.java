@@ -51,6 +51,9 @@ class SignalDetectionServiceTest {
     @Mock
     private PartialSignalMonitorService partialSignalMonitorService;
 
+    @Mock
+    private TrendDetectionService trendDetectionService;
+
     @InjectMocks
     private SignalDetectionService signalDetectionService;
 

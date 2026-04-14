@@ -66,6 +66,8 @@ public class ClaudeEnrichmentService {
         String direction = switch (signal.getSignalType()) {
             case OVERSOLD, PARTIAL_OVERSOLD, WATCH_OVERSOLD -> "oversold (potential buy)";
             case OVERBOUGHT, PARTIAL_OVERBOUGHT, WATCH_OVERBOUGHT -> "overbought (potential sell/exit)";
+            case TREND_BUY_DIP -> "trend buy-the-dip (strong uptrend, RSI pullback)";
+            case TREND_SELL_RALLY -> "trend sell-the-rally (strong downtrend, RSI bounce)";
         };
         return String.format(
                 "RSI alert: %s (%s) is showing %s signal. " +
