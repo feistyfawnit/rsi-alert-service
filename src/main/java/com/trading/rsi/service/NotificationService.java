@@ -217,13 +217,11 @@ public class NotificationService {
         // Add trend context if in a strong trend
         TrendDetectionService.TrendState trendState = trendDetectionService.getTrendState(signal.getSymbol());
         if (trendState != TrendDetectionService.TrendState.NEUTRAL) {
-            int count = trendState == TrendDetectionService.TrendState.STRONG_UPTREND
-                    ? trendDetectionService.getConsecutiveOverboughtCount(signal.getSymbol())
-                    : trendDetectionService.getConsecutiveOversoldCount(signal.getSymbol());
             String trendEmoji = trendState == TrendDetectionService.TrendState.STRONG_UPTREND ? "🐂" : "🐻";
-            message.append("\n").append(trendEmoji).append(" Trend: ")
-                   .append(trendState == TrendDetectionService.TrendState.STRONG_UPTREND ? "STRONG UPTREND" : "STRONG DOWNTREND")
-                   .append(" (").append(count).append(" consecutive signals)");
+            String trendLabel = trendState == TrendDetectionService.TrendState.STRONG_UPTREND ? "STRONG UPTREND" : "STRONG DOWNTREND";
+            String trendReason = trendDetectionService.getTrendReason(signal.getSymbol());
+            message.append("\n").append(trendEmoji).append(" Trend: ").append(trendLabel)
+                   .append(" — ").append(trendReason);
         }
 
         boolean isPartial = signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD

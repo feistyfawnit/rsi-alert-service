@@ -12,6 +12,7 @@
 - Push notifications on signal — live (originally ntfy.sh, migrated to Telegram April 2026)
 - PostgreSQL watchlist with CRUD REST API
 - Configurable thresholds, cooldown, quiet hours
+- **Trend Detection** (April 2026) — tracks consecutive overbought/oversold signals, suppresses counter-trend signals, generates TREND_BUY_DIP / TREND_SELL_RALLY alerts
 
 ---
 
@@ -93,11 +94,39 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 | Phase | Monthly Cost | Status |
 |-------|-------------|--------|
-| Phase 1 (crypto RSI) | $0 local / $5 Railway | ✅ Ready to deploy |
+| Phase 1 (crypto RSI + trend detection) | $0 local / $5 Railway | ✅ Ready to deploy |
 | Phase 2 (IG indices) | $5 Railway | ✅ Ready — enable IG credentials |
 | Phase 3 (Claude AI) | $7-10 | ✅ Ready — add `CLAUDE_API_KEY` |
 | Phase 4 (auto-trading) | $5-10 | ⛔ Do not enable without 3+ months paper trading |
 | Phase 5 (anomaly) | $0 | ⏳ Volume spike + Polymarket monitor live; cross-correlation not built yet |
+
+---
+
+## ✅ Recent Addition — Trend Detection v2 (April 14 2026)
+
+**Problem:** You were shorting into strong uptrends — RSI overbought signals fire repeatedly in bull markets, but the trend keeps running up. The original fix (counting 3+ consecutive signals) still let you enter 1–2 bad trades before suppression kicked in.
+
+**Solution:** `TrendDetectionService` now uses **EMA 50 on the 1h timeframe** as the primary trend filter:
+
+| Condition | Action |
+|-----------|--------|
+| Price > EMA50(1h) | `STRONG_UPTREND` — suppress OVERBOUGHT sell signals immediately |
+| Price < EMA50(1h) | `STRONG_DOWNTREND` — suppress OVERSOLD buy signals immediately |
+| EMA data not yet available (warmup) | Fallback to 2+ consecutive same-direction signals |
+
+**Dip entry (TREND_BUY_DIP):** Fires when fastest-TF RSI drops **below 60** (pulled back from overbought >70) while price remains **above EMA50(1h)**. This is the classic "buy the dip in an uptrend" setup — momentum cooled, structure intact.
+
+**Rally entry (TREND_SELL_RALLY):** Mirror — RSI bounces **above 40** while price **below EMA50(1h)**.
+
+**Risk settings for trend trades:**
+- Stop: half normal width (e.g. 0.25% for indices vs 0.5% standard)
+- Limit: 3× stop distance (3:1 R:R vs 2:1 standard)
+
+**Config:** `rsi.trend.ema-period: 50`, `rsi.trend.ema-timeframe: 1h`, `rsi.trend.consecutive-signals-for-trend: 2` (fallback)
+
+**Notification:** `🐂 Trend: STRONG UPTREND — price > EMA50(1h)` or `🐂 Trend: STRONG UPTREND — 2 consecutive signals (EMA building)`
+
+**Result:** From day 1 of any OVERBOUGHT signal, if price sits above its 50-hour EMA, the next sell signal is suppressed *immediately* — no more losing shorts into bull markets. You instead get **📈 TREND BUY (Dip)** when RSI cools toward 60.
 
 ---
 

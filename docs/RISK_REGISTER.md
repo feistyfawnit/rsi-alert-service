@@ -30,6 +30,7 @@
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
 | Strategy stops working | Medium | High | Monthly performance review; kill switch if drawdown >5% |
+| Trend detection false positive | Low | Medium | Tighter stops (half normal) on TREND_BUY_DIP/TREND_SELL_RALLY; trend expires after 12h if no confirming signal |
 | Overfitting to recent conditions | Medium | Medium | Backtest across multi-year bull/bear data |
 | Auto-execution bug (Phase 4) | Low | **Critical** | Extensive demo testing; manual approval; position limits |
 | MiFID II breach if shared | Low | **Critical** | Never distribute; keep private; personal use documented |
@@ -61,6 +62,7 @@
 | Mar 2026 | Java 21 → Java 25 (LTS) | Upgrade required Spring Boot 3.2.3 → 3.5.3 (ASM 9.8+ for class version 69), Lombok 1.18.36 → 1.18.38, and explicit annotationProcessorPaths in maven-compiler-plugin |
 | Mar 2026 | Volume spike threshold: 4.0σ → 5.5σ, lookback 20→30, min-periods 10→20 | Too many false positives at market open (8am DAX/FTSE) — baseline built from overnight low-volume data makes open look like 22σ spike. Also cold-start sensitivity after container restart. |
 | 8 Apr 2026 | IG 15 min polling + candle-period skip + 403 handling | IG 10k/week data point allowance exceeded: 8 enabled instruments at 5 min interval = ~37k/week (3.7× over). Split polling: Binance 5 min, IG 15 min. Candle-period skip avoids redundant fetches. 403 handler detects `exceeded-account-historical-data-allowance` (no session invalidation). Per-epic tracking prevents cascade. Disabled stale DB records (`CS.D.USCGC.TODAY.IP`, `CC.D.LCO.FSD.IP`). New budget: ~4,700/week. |
+| 14 Apr 2026 | Trend Detection + TREND_BUY_DIP / TREND_SELL_RALLY | RSI overbought sell signals were losing money in strong uptrends. Added `TrendDetectionService` to track consecutive signals (3+ → strong trend). Suppresses counter-trend signals. Generates trend-following signals (buy the dip in uptrend, sell the rally in downtrend) with tighter stops (half normal) and 3:1 R:R. Config: `rsi.trend.consecutive-signals-for-trend=3`, `rsi.trend.suppress-counter-trend=true`. |
 
 ---
 
