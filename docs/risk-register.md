@@ -7,7 +7,7 @@
 
 > ⚠️ **IG API DATA ALLOWANCE — CRITICAL**
 > IG permits **10,000 data points/week**. Exceeding this returns HTTP 403 (`exceeded-account-historical-data-allowance`). **This occurred April 8, 2026.**
-> - Current safe budget: ~4,700 pts/week (IG polling every 15 min, 5 IG instruments)
+> - Current safe budget: ~5,300 pts/week (IG polling every 15 min, 7 IG instruments with candle-period skip)
 > - Each candle fetch = 1 data point; warmup fetches 28 at once
 > - **Do NOT**: add IG instruments, shorten IG polling interval, or trigger bulk warmup without recalculating budget
 > - **Do NOT**: make ad-hoc IG price/candle API calls without counting the cost

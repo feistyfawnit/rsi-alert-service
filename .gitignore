@@ -36,6 +36,10 @@ build/
 .env
 *.log
 
+### Runtime data (CSV archives live on disk, not in git) ###
+signal_archive/
+daily_prices.csv
+
 ### Planning / Notes (keep outside repo) ###
 PHASE2_ROADMAP.md
 QUICKSTART.md

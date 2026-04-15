@@ -8,6 +8,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 
 @Component
 @Slf4j
@@ -59,6 +60,24 @@ public class DataInitializer implements ApplicationRunner {
 
         if (seeded > 0 || updated > 0) {
             log.info("Data initializer complete: {} seeded, {} synced from YAML", seeded, updated);
+        }
+
+        // Disable (don't delete) DB instruments not present in YAML config.
+        // Candle history is preserved so it can be reused if the instrument returns.
+        // Stale rows won't be polled because they'll be disabled.
+        List<String> yamlSymbols = watchlistProperties.getInstruments().stream()
+                .map(WatchlistProperties.InstrumentConfig::getSymbol)
+                .toList();
+        List<Instrument> stale = instrumentRepository.findBySymbolNotIn(yamlSymbols);
+        if (!stale.isEmpty()) {
+            for (Instrument orphan : stale) {
+                if (orphan.getEnabled()) {
+                    orphan.setEnabled(false);
+                    instrumentRepository.save(orphan);
+                    log.warn("Disabled stale instrument not in YAML: {} ({}) — candle history retained",
+                            orphan.getName(), orphan.getSymbol());
+                }
+            }
         }
 
         var enabled = instrumentRepository.findByEnabledTrue();

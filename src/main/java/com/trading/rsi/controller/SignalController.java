@@ -1,16 +1,21 @@
 package com.trading.rsi.controller;
 
+import com.trading.rsi.domain.DailyPriceSummary;
 import com.trading.rsi.domain.Instrument;
 import com.trading.rsi.domain.SignalLog;
 import com.trading.rsi.model.Candle;
+import com.trading.rsi.repository.DailyPriceSummaryRepository;
 import com.trading.rsi.repository.InstrumentRepository;
 import com.trading.rsi.repository.SignalLogRepository;
+import com.trading.rsi.service.DailyPriceRollupService;
 import com.trading.rsi.service.MarketDataService;
 import com.trading.rsi.service.NotificationService;
 import com.trading.rsi.service.PriceHistoryService;
 import com.trading.rsi.service.RsiCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,6 +23,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -34,6 +40,8 @@ public class SignalController {
     private final RsiCalculator rsiCalculator;
     private final MarketDataService marketDataService;
     private final NotificationService notificationService;
+    private final DailyPriceSummaryRepository dailyPriceSummaryRepository;
+    private final DailyPriceRollupService dailyPriceRollupService;
 
     @GetMapping
     public List<SignalLog> getAllSignals() {
@@ -271,6 +279,74 @@ public class SignalController {
     @GetMapping("/no-trade-mode")
     public ResponseEntity<Map<String, Object>> getNoTradeModeStatus() {
         return ResponseEntity.ok(Map.of("noTradeMode", notificationService.isNoTradeModeActive()));
+    }
+
+    /**
+     * Daily price summaries as JSON.
+     * Optional query params: symbol, from (YYYY-MM-DD), to (YYYY-MM-DD).
+     */
+    @GetMapping("/daily-prices")
+    public List<DailyPriceSummary> getDailyPrices(
+            @RequestParam(required = false) String symbol,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+
+        if (symbol != null && from != null && to != null) {
+            return dailyPriceSummaryRepository.findBySymbolAndSummaryDateBetweenOrderBySummaryDateAsc(
+                    symbol, LocalDate.parse(from), LocalDate.parse(to));
+        } else if (symbol != null) {
+            return dailyPriceSummaryRepository.findBySymbolOrderBySummaryDateAsc(symbol);
+        } else {
+            return dailyPriceSummaryRepository.findAllByOrderBySymbolAscSummaryDateAsc();
+        }
+    }
+
+    /**
+     * Export daily price summaries as CSV.
+     * Optional query params: symbol, from (YYYY-MM-DD), to (YYYY-MM-DD).
+     */
+    @GetMapping(value = "/daily-prices/csv", produces = "text/csv")
+    public ResponseEntity<String> getDailyPricesCsv(
+            @RequestParam(required = false) String symbol,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+
+        List<DailyPriceSummary> data = getDailyPrices(symbol, from, to);
+        StringBuilder csv = new StringBuilder();
+        csv.append("symbol,instrument_name,date,open,high,low,close,volume,candle_count\n");
+        for (DailyPriceSummary row : data) {
+            csv.append(String.join(",",
+                    row.getSymbol(),
+                    row.getInstrumentName() != null ? row.getInstrumentName() : "",
+                    row.getSummaryDate().toString(),
+                    row.getOpenPrice().toPlainString(),
+                    row.getHighPrice().toPlainString(),
+                    row.getLowPrice().toPlainString(),
+                    row.getClosePrice().toPlainString(),
+                    row.getVolume() != null ? row.getVolume().toPlainString() : "",
+                    row.getCandleCount() != null ? row.getCandleCount().toString() : ""
+            )).append("\n");
+        }
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=daily_prices.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv.toString());
+    }
+
+    /**
+     * Manually trigger a rollup for a specific date (YYYY-MM-DD).
+     * Useful for backfilling days that were missed.
+     */
+    @PostMapping("/daily-prices/rollup")
+    public ResponseEntity<Map<String, Object>> triggerRollup(
+            @RequestParam(required = false) String date) {
+        LocalDate rollupDate = date != null ? LocalDate.parse(date) : LocalDate.now().minusDays(1);
+        int created = dailyPriceRollupService.rollupDate(rollupDate);
+        return ResponseEntity.ok(Map.of(
+                "date", rollupDate.toString(),
+                "instrumentsRolledUp", created
+        ));
     }
 
     private int candleMinutes(String timeframe) {

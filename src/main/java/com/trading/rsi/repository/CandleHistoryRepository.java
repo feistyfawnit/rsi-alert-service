@@ -17,6 +17,9 @@ public interface CandleHistoryRepository extends JpaRepository<CandleHistory, Lo
 
     List<CandleHistory> findBySymbolAndTimeframeOrderByCandleTimeAsc(String symbol, String timeframe);
 
+    List<CandleHistory> findBySymbolAndTimeframeAndCandleTimeBetweenOrderByCandleTimeAsc(
+            String symbol, String timeframe, Instant from, Instant to);
+
     @Modifying
     @Transactional
     @Query(value = """
@@ -50,4 +53,8 @@ public interface CandleHistoryRepository extends JpaRepository<CandleHistory, Lo
     void trimToLatest(@Param("symbol") String symbol,
                       @Param("timeframe") String timeframe,
                       @Param("keep") int keep);
+
+    @Modifying
+    @Transactional
+    void deleteBySymbol(String symbol);
 }

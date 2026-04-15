@@ -27,7 +27,7 @@ curl -s -X GET "https://api.ig.com/gateway/deal/prices/IX.D.DAX.DAILY.IP/HOUR/1"
 | Non-trading requests/min | 60 | Rolling |
 | Per-account requests/min | 30 | Rolling |
 
-**Current config budget**: ~4,700 data points/week (6 IG instruments × 3 TFs, 15 min polling + candle skip)
+**Current config budget**: ~5,300 data points/week (7 IG instruments, 15 min polling + candle-period skip)
 
 ## Common Error Codes
 
@@ -53,8 +53,8 @@ Check logs: `IG circuit breaker OPEN` or `IG circuit breaker CLOSED`
 
 **Dangerous changes** (affect data point budget):
 - `ig-interval-seconds` in `application.yml` — lower = more data points
-- Adding IG instruments — each adds ~800 data points/week
-- Enabling Gold/Oil — verify epic codes first with IG companion app
+- Adding IG instruments — each adds roughly 600–800 data points/week depending on timeframes
+- Changing IG epic codes without verifying them via IG search + one-candle curl test
 
 **Never do**:
 - Poll IG faster than 15 min without checking budget
@@ -65,11 +65,14 @@ Check logs: `IG circuit breaker OPEN` or `IG circuit breaker CLOSED`
 ```
 Weekly data points = instruments × timeframes × (market_hours / interval_seconds) × 7
 
-Example: 6 IG instruments × 3 TFs × (16h / 15min) × 7 = ~4,700/week
+Current rough mix:
+- 4 indices × (15m,30m,1h)
+- 3 commodities × (15m,1h,4h)
+- Total ≈ ~5,300/week with candle-period skip
 ```
 
 ## Files to Check
 
 - `application.yml`: `ig-interval-seconds`, instrument list
-- `docs/PROJECT_LOG.md`: Incident history
-- `docs/RISK_REGISTER.md`: Known risks and mitigations
+- `docs/project-log.md`: Incident history
+- `docs/risk-register.md`: Known risks and mitigations

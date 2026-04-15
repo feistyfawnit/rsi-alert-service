@@ -32,7 +32,6 @@ A production-grade Spring Boot service that monitors financial instruments for m
 ### 1. Prerequisites
 
 - Docker & Docker Compose installed
-- (Optional) Paid Finnhub plan for index/commodity data (free tier doesn't include indices)
 
 ### 2. Configuration
 
@@ -97,8 +96,8 @@ The app comes pre-configured with:
 - **Bitcoin (BTCUSDT)** - Binance
 - **Ethereum (ETHUSDT)** - Binance
 - **Bitcoin Cash (BCHUSDT)** - Binance
-- **DAX 40** - IG API (requires `IG_ENABLED=true` + credentials)
-- **FTSE 100, S&P 500, Gold, Oil** - IG API (seeded, set `enabled: true` in YAML)
+- **DAX 40, FTSE 100, S&P 500, Nasdaq 100** - IG API
+- **Gold, Silver, Oil (Brent)** - IG API
 
 All crypto data is FREE via Binance API (no API key required). Indices/commodities require an IG account.
 
@@ -112,7 +111,8 @@ rsi:
   oversold-threshold: 30        # Default oversold threshold
   overbought-threshold: 70      # Default overbought threshold
   polling:
-    interval-seconds: 60        # How often to check for signals
+    interval-seconds: 300       # Binance polling interval (5 min)
+    ig-interval-seconds: 900    # IG polling interval (15 min)
   quiet-hours:
     enabled: true
     start-hour: 22              # 10 PM UTC (11 PM BST)
@@ -141,7 +141,7 @@ IG Daily Funded Bets (DFB) accrue **overnight financing charges every calendar d
 
 ## Troubleshooting
 
-See [QUICKSTART.md](QUICKSTART.md) for detailed troubleshooting. Quick checks:
+See [docs/troubleshooting.md](docs/troubleshooting.md) for operational troubleshooting and IG quota guidance. See [QUICKSTART.md](QUICKSTART.md) for first-run/demo steps. Quick checks:
 
 ```bash
 curl http://localhost:8080/actuator/health           # App running?
@@ -154,9 +154,14 @@ docker-compose logs -f app                             # Check logs
 
 | Doc | Purpose |
 |---|---|
+| [AGENTS.md](AGENTS.md) | Concise AI/developer entry point and operational guardrails |
+| [QUICKSTART.md](QUICKSTART.md) | First-run setup and demo flow |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Operational checks, common failures, IG quota notes |
 | [docs/architecture.md](docs/architecture.md) | System design, components, data flow |
-| [docs/api.md](docs/api.md) | Full REST API reference |
-| [QUICKSTART.md](QUICKSTART.md) | Setup, demo, troubleshooting |
+| [docs/api.md](docs/api.md) | REST API reference |
+| [docs/project-log.md](docs/project-log.md) | Incident history and decisions over time |
+| [docs/risk-register.md](docs/risk-register.md) | Risks, constraints, and operational warnings |
+| [docs/archived/requirements.md](docs/archived/requirements.md) | Original historical specification (not the current source of truth) |
 
 ⚠️ **Personal use only — not financial advice — MiFID II: no public distribution**
 

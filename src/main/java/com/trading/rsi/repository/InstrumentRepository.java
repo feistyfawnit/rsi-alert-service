@@ -12,4 +12,5 @@ public interface InstrumentRepository extends JpaRepository<Instrument, Long> {
     List<Instrument> findByEnabledTrue();
     boolean existsBySymbol(String symbol);
     Optional<Instrument> findBySymbol(String symbol);
+    List<Instrument> findBySymbolNotIn(List<String> symbols);
 }

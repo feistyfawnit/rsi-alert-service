@@ -57,7 +57,8 @@ Fires a `⚠️ ANOMALY DETECTED` notification for a 12.5pp odds shift on the US
 ### 4. Real RSI signal (uses live market data, not labelled [TEST])
 
 ```bash
-# Lower thresholds so current price crosses — real alert fires on next poll (~60s)
+# Lower thresholds so current price crosses — real alert fires on next poll
+# (~5 min for Binance instruments, ~15 min for IG instruments)
 curl -X POST "http://localhost:8080/api/test/lower-thresholds?oversold=50&overbought=50"
 
 # Reset when done
@@ -76,35 +77,27 @@ curl -X POST http://localhost:8080/api/test/reset-thresholds
 | BTCUSDT | Bitcoin | Binance (free) | 15m, 1h, 4h |
 | ETHUSDT | Ethereum | Binance (free) | 15m, 1h, 4h |
 | BCHUSDT | Bitcoin Cash | Binance (free) | 15m, 1h, 4h |
-| IX.D.DAX.DAILY.IP | DAX 40 | IG API | 15m, 1h, 4h |
-| IX.D.FTSE.DAILY.IP | FTSE 100 | IG API | 15m, 1h, 4h |
-| IX.D.SPTRD.DAILY.IP | S&P 500 | IG API | 15m, 1h, 4h |
+| IX.D.DAX.DAILY.IP | DAX 40 | IG API | 15m, 30m, 1h |
+| IX.D.FTSE.DAILY.IP | FTSE 100 | IG API | 15m, 30m, 1h |
+| IX.D.SPTRD.DAILY.IP | S&P 500 | IG API | 15m, 30m, 1h |
+| IX.D.NASDAQ.CASH.IP | Nasdaq 100 | IG API | 15m, 30m, 1h |
 | CS.D.USCGC.TODAY.IP | Gold (Spot) | IG API | 15m, 1h, 4h |
+| CS.D.USCSI.TODAY.IP | Silver | IG API | 15m, 1h, 4h |
+| CC.D.LCO.USS.IP | Oil (Brent) | IG API | 15m, 1h, 4h |
 
-IG instruments require `IG_ENABLED=true` and credentials in `.env`. Oil is seeded but `enabled: false`.
+IG instruments require `IG_ENABLED=true` and credentials in `.env`.
 
 ## Phase Status
 
-- **Phase 1** ✅ Core RSI alerts, Binance crypto, ntfy.sh
-- **Phase 2** ✅ IG API integration (DAX, FTSE, Gold, Oil, S&P 500)
+- **Phase 1** ✅ Core RSI alerts, Binance crypto, Telegram notifications
+- **Phase 2** ✅ IG API integration (indices + commodities)
 - **Phase 3** ✅ Claude AI enrichment — enable with `CLAUDE_ENABLED=true` + API key
 - **Phase 4** ✅ Auto-execution scaffolded — **hard-disabled**, do not enable without paper trading
 - **Phase 5** ⏳ Volume spike detector live; Polymarket monitor live; cross-instrument correlation not yet built
 
 ## Troubleshooting
 
-**App won't start?**
-```bash
-docker-compose down && docker-compose up -d
-docker-compose logs app
-```
+For operational issues, log errors, and IG quota guidance, see:
 
-**No signals after an hour?**
-- RSI alignment across 3 timeframes is rare — can take 6–48h on quiet market days
-- Check logs for `Updated SOLUSDT` messages to confirm polling is working
-- Use `POST /api/test/notify` to confirm Telegram delivery works independently
-
-**Wipe DB and restart fresh:**
-```bash
-docker-compose down -v && docker-compose up -d
-```
+- `docs/TROUBLESHOOTING.md`
+- `AGENTS.md`

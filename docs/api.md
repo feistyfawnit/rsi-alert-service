@@ -45,6 +45,22 @@ Base URL: `http://localhost:8080`
 | `GET` | `/api/signals/rsi-snapshot` | Live RSI values for all enabled instruments (from in-memory history) |
 | `GET` | `/api/signals/retrospective/{symbol}?at=ISO8601` | Historical RSI analysis — would a signal have fired at this time? (IG instruments only) |
 
+### Daily Price History — `/api/signals/daily-prices`
+
+Long-term OHLCV (Open/High/Low/Close/Volume) summaries rolled up once per day per instrument. Never trimmed — grows ~4KB/year. Useful for trend analysis and backtesting.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/signals/daily-prices` | All daily summaries (JSON) |
+| `GET` | `/api/signals/daily-prices?symbol=BTCUSDT` | Filter by symbol |
+| `GET` | `/api/signals/daily-prices?symbol=BTCUSDT&from=2026-04-01&to=2026-04-15` | Date range |
+| `GET` | `/api/signals/daily-prices/csv` | CSV export (same filters supported) |
+| `POST` | `/api/signals/daily-prices/rollup?date=2026-04-14` | Manually trigger rollup for a specific date |
+
+The rollup runs automatically at **00:05 UTC daily**, summarising the previous day's candle data using the shortest configured timeframe per instrument (typically 15m).
+
+---
+
 ### Retrospective example
 
 ```
