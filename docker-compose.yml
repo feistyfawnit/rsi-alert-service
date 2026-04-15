@@ -23,6 +23,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      TZ: Europe/London
       DATABASE_URL: jdbc:postgresql://postgres:5432/market_signals
       DATABASE_USER: postgres
       DATABASE_PASSWORD: postgres

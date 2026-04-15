@@ -94,11 +94,24 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 | Phase | Monthly Cost | Status |
 |-------|-------------|--------|
-| Phase 1 (crypto RSI + trend detection) | $0 local / $5 Railway | ✅ Ready to deploy |
-| Phase 2 (IG indices) | $5 Railway | ✅ Ready — enable IG credentials |
+| Phase 1 (crypto RSI + trend detection) | $0 local / $5 Railway / $0 AWS Free Tier | ✅ Ready to deploy |
+| Phase 2 (IG indices) | $5 Railway / $0-15 AWS | ✅ Ready — enable IG credentials |
 | Phase 3 (Claude AI) | $7-10 | ✅ Ready — add `CLAUDE_API_KEY` |
 | Phase 4 (auto-trading) | $5-10 | ⛔ Do not enable without 3+ months paper trading |
 | Phase 5 (anomaly) | $0 | ⏳ Volume spike + Polymarket monitor live; cross-correlation not built yet |
+
+### Hosting Comparison
+
+| | **Render** | **Railway** | **AWS Free Tier** |
+|--|------------|-------------|-------------------|
+| **Cost** | $0 (sleeps) / $7+ always-on | $5/mo flat | $0 for 12 months, then ~$15-20/mo |
+| **Sleeps?** | Yes — free tier spins down after 15min | No | No |
+| **CV Value** | Low | Low | **High** — shows AWS/container skills |
+| **PostgreSQL** | Paid add-on | Built-in | RDS free tier or EC2 self-hosted |
+| **Complexity** | Low | Low | Medium — VPC, IAM, ECS/Fargate |
+| **SSL/Domain** | Automatic | Automatic | Manual ACM setup |
+| **CI/CD** | GitHub auto-deploy | GitHub auto-deploy | GitHub Actions → ECR → ECS |
+| **Best for** | Quick demos | Production, always-on | Learning AWS, CV building |
 
 ---
 
