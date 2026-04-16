@@ -115,31 +115,33 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 ---
 
-## ✅ Recent Addition — Trend Detection v2 (April 14 2026)
+## ✅ Recent Addition — Trend Detection v2 + v2.1 (April 14–16 2026)
 
-**Problem:** You were shorting into strong uptrends — RSI overbought signals fire repeatedly in bull markets, but the trend keeps running up. The original fix (counting 3+ consecutive signals) still let you enter 1–2 bad trades before suppression kicked in.
+**Problem:** You were shorting into strong uptrends — RSI overbought signals fire repeatedly in bull markets, but the trend keeps running up. The original fix (counting 3+ consecutive signals) still let you enter 1–2 bad trades before suppression kicked in. A second issue (cold-start): EMA50 required 50+ hourly candles, leaving a ~50h window where trend state was NEUTRAL and counter-trend signals were not suppressed.
 
-**Solution:** `TrendDetectionService` now uses **EMA 50 on the 1h timeframe** as the primary trend filter:
+**Solution:** `TrendDetectionService` uses **EMA 20 on the 1h timeframe** as the primary trend filter (available immediately after the 28-candle warmup), with two fallbacks:
 
 | Condition | Action |
 |-----------|--------|
-| Price > EMA50(1h) | `STRONG_UPTREND` — suppress OVERBOUGHT sell signals immediately |
-| Price < EMA50(1h) | `STRONG_DOWNTREND` — suppress OVERSOLD buy signals immediately |
-| EMA data not yet available (warmup) | Fallback to 2+ consecutive same-direction signals |
+| Price above EMA20(1h) | `STRONG_UPTREND` — suppress OVERBOUGHT sell signals immediately |
+| Price below EMA20(1h) | `STRONG_DOWNTREND` — suppress OVERSOLD buy signals immediately |
+| EMA history insufficient (< 20 candles) | Fallback 1: price momentum over last 5 candles |
+| Price moved >1% over last 5 1h candles | `STRONG_UPTREND` or `STRONG_DOWNTREND` via momentum |
+| Neither EMA nor momentum available | Fallback 2: 2+ consecutive same-direction signals |
 
-**Dip entry (TREND_BUY_DIP):** Fires when fastest-TF RSI drops **below 60** (pulled back from overbought >70) while price remains **above EMA50(1h)**. This is the classic "buy the dip in an uptrend" setup — momentum cooled, structure intact.
+**Dip entry (TREND_BUY_DIP):** Fires when fastest-TF RSI drops **below 60** (pulled back from overbought >70) while price remains **above EMA20(1h)**. This is the classic "buy the dip in an uptrend" setup — momentum cooled, structure intact.
 
-**Rally entry (TREND_SELL_RALLY):** Mirror — RSI bounces **above 40** while price **below EMA50(1h)**.
+**Rally entry (TREND_SELL_RALLY):** Mirror — RSI bounces **above 40** while price **below EMA20(1h)**.
 
 **Risk settings for trend trades:**
 - Stop: half normal width (e.g. 0.25% for indices vs 0.5% standard)
 - Limit: 3× stop distance (3:1 R:R vs 2:1 standard)
 
-**Config:** `rsi.trend.ema-period: 50`, `rsi.trend.ema-timeframe: 1h`, `rsi.trend.consecutive-signals-for-trend: 2` (fallback)
+**Config:** `rsi.trend.ema-period: 20`, `rsi.trend.ema-timeframe: 1h`, `rsi.trend.consecutive-signals-for-trend: 2` (fallback)
 
-**Notification:** `🐂 Trend: STRONG UPTREND — price > EMA50(1h)` or `🐂 Trend: STRONG UPTREND — 2 consecutive signals (EMA building)`
+**Notification:** `🐂 STRONG UPTREND — price above EMA20(1h)` or `🐂 STRONG UPTREND — 1.2% move in 5 1h candles (momentum proxy)`
 
-**Result:** From day 1 of any OVERBOUGHT signal, if price sits above its 50-hour EMA, the next sell signal is suppressed *immediately* — no more losing shorts into bull markets. You instead get **📈 TREND BUY (Dip)** when RSI cools toward 60.
+**Result:** From warmup completion (~28h), if price sits above its 20-hour EMA, the next sell signal is suppressed *immediately* — no more losing shorts into bull markets. You instead get **📈 TREND BUY (Dip)** when RSI cools toward 60.
 
 ---
 

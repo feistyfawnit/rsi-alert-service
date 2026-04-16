@@ -40,6 +40,9 @@ build/
 signal_archive/
 daily_prices.csv
 
+### Personal financial data — never commit ###
+docs/archived/TransactionHistory*.csv
+
 ### Planning / Notes (keep outside repo) ###
 PHASE2_ROADMAP.md
 QUICKSTART.md

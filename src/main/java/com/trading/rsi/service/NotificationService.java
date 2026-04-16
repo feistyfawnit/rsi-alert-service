@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -168,68 +169,67 @@ public class NotificationService {
             case TREND_SELL_RALLY -> "TREND SELL (Rally)";
         };
         
-        return emoji + " " + signal.getInstrumentName() + " " + signalName;
+        return "<b>" + emoji + " " + escapeHtml(signal.getInstrumentName()) + " " + signalName + "</b>";
     }
     
     private String buildNotificationMessage(RsiSignal signal, String aiContext) {
         StringBuilder message = new StringBuilder();
-        
-        message.append("Price: $").append(signal.getCurrentPrice()).append("\n");
-        message.append("Alignment: ").append(signal.getTimeframesAligned())
-               .append("/").append(signal.getTotalTimeframes()).append(" timeframes\n");
-        message.append("Strength: ").append(signal.getSignalStrength()).append("\n\n");
-        message.append("RSI Values:\n");
-        
-        signal.getRsiValues().entrySet().stream()
+
+        // Price (bold for emphasis)
+        message.append("Price: <b>").append(formatPrice(signal.getCurrentPrice(), signal.getSymbol())).append("</b>\n");
+
+        // RSI compact one-liner: "RSI 3/3: 15m 75.4 \u00b7 30m 78.9 \u00b7 1h 79.5"
+        String rsiLine = signal.getRsiValues().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> message.append("  ")
-                        .append(entry.getKey())
-                        .append(": ")
-                        .append(entry.getValue().setScale(2, RoundingMode.HALF_UP))
-                        .append("\n"));
-        
+                .map(e -> e.getKey() + " " + e.getValue().setScale(1, RoundingMode.HALF_UP))
+                .collect(Collectors.joining(" \u00b7 "));
+        message.append("RSI ").append(signal.getTimeframesAligned())
+               .append("/").append(signal.getTotalTimeframes())
+               .append(": ").append(rsiLine).append("\n");
+
+        // Stochastic \u2014 collapsed when all TFs share same label
         if (signal.getStochasticValues() != null && !signal.getStochasticValues().isEmpty()) {
-            message.append("\nStochastic (14,3):\n");
-            signal.getStochasticValues().entrySet().stream()
-                    .sorted(Map.Entry.comparingByKey())
-                    .forEach(entry -> {
-                        StochasticResult s = entry.getValue();
-                        message.append("  ").append(entry.getKey())
-                               .append(": %K=").append(s.k())
-                               .append(" %D=").append(s.d())
-                               .append(" → ").append(s.label())
-                               .append("\n");
-                    });
+            appendStochastics(message, signal.getStochasticValues());
         }
 
-        message.append("\nAction: ");
-        message.append(switch (signal.getSignalType()) {
-            case OVERSOLD -> "Consider LONG position";
-            case OVERBOUGHT -> "Consider SHORT/EXIT position";
-            case PARTIAL_OVERSOLD -> "Watch for full alignment - potential LONG setup";
-            case PARTIAL_OVERBOUGHT -> "Watch for full alignment - potential SHORT/EXIT";
-            case WATCH_OVERSOLD -> "1 TF oversold + others approaching — check chart for entry";
-            case WATCH_OVERBOUGHT -> "1 TF overbought + others approaching — check chart for exit";
-            case TREND_BUY_DIP -> "BUY THE DIP — Strong uptrend, RSI pulled back. Go LONG with tight stop.";
-            case TREND_SELL_RALLY -> "SELL THE RALLY — Strong downtrend, RSI bounced. Go SHORT with tight stop.";
-        });
-
-        // Add trend context if in a strong trend
+        // Trend context
         TrendDetectionService.TrendState trendState = trendDetectionService.getTrendState(signal.getSymbol());
         if (trendState != TrendDetectionService.TrendState.NEUTRAL) {
-            String trendEmoji = trendState == TrendDetectionService.TrendState.STRONG_UPTREND ? "🐂" : "🐻";
+            String trendEmoji = trendState == TrendDetectionService.TrendState.STRONG_UPTREND ? "\uD83D\uDC02" : "\uD83D\uDC3B";
             String trendLabel = trendState == TrendDetectionService.TrendState.STRONG_UPTREND ? "STRONG UPTREND" : "STRONG DOWNTREND";
             String trendReason = trendDetectionService.getTrendReason(signal.getSymbol());
-            message.append("\n").append(trendEmoji).append(" Trend: ").append(trendLabel)
-                   .append(" — ").append(trendReason);
+            message.append("\n").append(trendEmoji).append(" <b>").append(trendLabel)
+                   .append("</b> \u2014 <i>").append(escapeHtml(trendReason)).append("</i>\n");
         }
 
+        // Crypto overnight warning (one-liner)
+        if (isCryptoSymbol(signal.getSymbol())) {
+            message.append("<i>\u26a0\ufe0f CFD overnight ~\u20ac0.50-0.70/unit \u2014 close by 22:00 UTC</i>\n");
+        }
+
+        // Action hint \u2014 only for non-obvious signal types
+        boolean isTrendSignal = signal.getSignalType() == SignalLog.SignalType.TREND_BUY_DIP
+                || signal.getSignalType() == SignalLog.SignalType.TREND_SELL_RALLY;
+        boolean isWatch = signal.getSignalType() == SignalLog.SignalType.WATCH_OVERSOLD
+                || signal.getSignalType() == SignalLog.SignalType.WATCH_OVERBOUGHT;
+        if (isTrendSignal) {
+            boolean isLong = signal.getSignalType() == SignalLog.SignalType.TREND_BUY_DIP;
+            message.append(isLong ? "<i>\u2192 Go LONG with tight stop in confirmed uptrend</i>\n"
+                                  : "<i>\u2192 Go SHORT with tight stop in confirmed downtrend</i>\n");
+        } else if (isWatch) {
+            String watchHint = signal.getSignalType() == SignalLog.SignalType.WATCH_OVERSOLD
+                    ? "1 TF oversold + others approaching \u2014 check chart"
+                    : "1 TF overbought + others approaching \u2014 check chart";
+            message.append("<i>\u2192 ").append(watchHint).append("</i>\n");
+        }
+
+        // Partial: show which TFs still need to align
         boolean isPartial = signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD
                 || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERBOUGHT;
         if (isPartial) {
             boolean oversoldSignal = signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD;
             double threshold = oversoldSignal ? 30.0 : 70.0;
-            message.append("\n⏳ Waiting on:");
+            message.append("\u23f3 Waiting:");
             signal.getRsiValues().entrySet().stream()
                     .sorted(Map.Entry.comparingByKey())
                     .forEach(entry -> {
@@ -237,19 +237,19 @@ public class NotificationService {
                         boolean aligned = oversoldSignal ? rsi < threshold : rsi > threshold;
                         if (!aligned) {
                             double gap = oversoldSignal ? rsi - threshold : threshold - rsi;
-                            message.append(String.format(" %s RSI %.1f → needs %s%.0f (%.1f pts away)",
-                                    entry.getKey(), rsi, oversoldSignal ? "<" : ">",
-                                    threshold, gap));
+                            message.append(String.format(" %s %.1f\u2192%s%.0f (%.1fpt)",
+                                    entry.getKey(), rsi, oversoldSignal ? "&lt;" : "&gt;", threshold, gap));
                         }
                     });
+            message.append("\n");
         }
 
-        message.append("\n").append(buildDemoGuidance(signal));
+        message.append(buildDemoGuidance(signal));
 
         if (aiContext != null && !aiContext.isBlank()) {
-            message.append("\n\n📰 AI Context:\n").append(aiContext);
+            message.append("\n\uD83D\uDCF0 ").append(escapeHtml(aiContext));
         }
-        
+
         return message.toString();
     }
 
@@ -257,19 +257,17 @@ public class NotificationService {
         double stopPct = inferStopPercent(signal.getSymbol());
         boolean isLong = signal.getSignalType() == SignalLog.SignalType.OVERSOLD
                 || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD
+                || signal.getSignalType() == SignalLog.SignalType.WATCH_OVERSOLD
                 || signal.getSignalType() == SignalLog.SignalType.TREND_BUY_DIP;
         boolean isPartial = signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD
                 || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERBOUGHT;
-        boolean isCrypto = !signal.getSymbol().startsWith("IX.") && !signal.getSymbol().startsWith("CS.")
-                && !signal.getSymbol().startsWith("CC.");
         boolean isTrendSignal = signal.getSignalType() == SignalLog.SignalType.TREND_BUY_DIP
                 || signal.getSignalType() == SignalLog.SignalType.TREND_SELL_RALLY;
 
         BigDecimal entry = signal.getCurrentPrice();
-        // Trend signals use tighter stops (half normal) since entering with the trend
         double effectiveStopPct = isTrendSignal ? stopPct * 0.5 : stopPct;
         long stopPts = Math.round(entry.doubleValue() * effectiveStopPct / 100.0);
-        long limitPts = isTrendSignal ? stopPts * 3 : stopPts * 2; // 3:1 R:R for trend trades
+        long limitPts = isTrendSignal ? stopPts * 3 : stopPts * 2;
 
         BigDecimal riskAmount = BigDecimal.valueOf(demoAccountBalance)
                 .multiply(BigDecimal.valueOf(demoRiskPercent / 100.0))
@@ -278,34 +276,79 @@ public class NotificationService {
                 ? riskAmount.divide(BigDecimal.valueOf(stopPts), 2, RoundingMode.HALF_UP).toPlainString()
                 : "n/a";
 
-        String direction = isLong ? "GO LONG (BUY)" : "GO SHORT (SELL)";
-        StringBuilder sb = new StringBuilder();
-        sb.append("\n📊 Demo Guidance (Spread Bet):\n");
-        if (isPartial) {
-            sb.append("Status: Watching — ").append(signal.getTimeframesAligned())
-              .append("/").append(signal.getTotalTimeframes()).append(" TFs aligned, not full yet\n");
-            sb.append("If confirmed: ").append(direction).append("\n");
-        } else {
-            sb.append("Direction: ").append(direction).append("\n");
-        }
+        String direction = isLong ? "LONG" : "SHORT";
         String rrLabel = isTrendSignal ? "3:1" : "2:1";
         double rrMultiplier = isTrendSignal ? 3.0 : 2.0;
-        sb.append("Size: ").append(sizePerPoint).append(" ").append(accountCurrency)
-          .append("/pt (max loss ").append(accountCurrency).append(" ").append(riskAmount.toPlainString()).append(")\n");
-        sb.append("Stop: ").append(stopPts).append(" pts away (").append(String.format("%.2f", effectiveStopPct))
-          .append(isLong ? "% below entry" : "% above entry").append(")\n");
-        sb.append("Limit: ").append(limitPts).append(" pts away (").append(rrLabel).append(" — profit ").append(accountCurrency)
-          .append(" ").append(riskAmount.multiply(java.math.BigDecimal.valueOf(rrMultiplier)).toPlainString()).append(")\n");
-        if (isCrypto) {
-            sb.append("[Binance price — adjust pts if IG entry differs: stop = IG entry × ").append(String.format("%.2f", effectiveStopPct)).append("%]\n");
-        }
+        String profitAmt = riskAmount.multiply(BigDecimal.valueOf(rrMultiplier))
+                .setScale(0, RoundingMode.HALF_UP).toPlainString();
+
+        StringBuilder sb = new StringBuilder("\n");
         if (isPartial) {
-            sb.append("⏳ Wait for ").append(signal.getTotalTimeframes()).append("/")
-              .append(signal.getTotalTimeframes()).append(" TF alignment before entering");
+            sb.append("\uD83D\uDCCA WATCHING ").append(signal.getTimeframesAligned())
+              .append("/").append(signal.getTotalTimeframes()).append(" TFs")
+              .append(" | If confirmed: <b>").append(direction).append("</b>")
+              .append(" | ").append(sizePerPoint).append(" ").append(accountCurrency).append("/pt")
+              .append(" | Stop ").append(stopPts).append("pt")
+              .append(" | Limit ").append(limitPts).append("pt (").append(rrLabel)
+              .append(", ~").append(accountCurrency).append(profitAmt).append(")");
         } else {
-            sb.append("✅ Confirm chart, then place on IG demo");
+            sb.append("\uD83D\uDCCA <b>").append(direction).append("</b>")
+              .append(" | ").append(sizePerPoint).append(" ").append(accountCurrency).append("/pt")
+              .append(" | Stop ").append(stopPts).append("pt")
+              .append(" | Limit ").append(limitPts).append("pt (").append(rrLabel)
+              .append(", ~").append(accountCurrency).append(profitAmt).append(")");
+        }
+        if (isCryptoSymbol(signal.getSymbol())) {
+            sb.append("\n<i>[Binance price \u2014 adjust stops on IG entry accordingly]</i>");
         }
         return sb.toString();
+    }
+
+    private boolean isCryptoSymbol(String symbol) {
+        return !symbol.startsWith("IX.") && !symbol.startsWith("CS.") && !symbol.startsWith("CC.");
+    }
+
+    private String formatPrice(BigDecimal price, String symbol) {
+        if (price == null) return "N/A";
+        String currencySymbol = inferCurrencySymbol(symbol);
+        return currencySymbol + String.format("%,.2f", price.doubleValue());
+    }
+
+    private String inferCurrencySymbol(String symbol) {
+        // DAX (Germany) trades in EUR
+        if (symbol.contains("DAX")) return "\u20ac";
+        // FTSE (UK) trades in GBP (actually GBX pence, but shown as GBP)
+        if (symbol.contains("FTSE")) return "\u00a3";
+        // Everything else (crypto, US indices, commodities) primarily USD-based
+        return "$";
+    }
+
+    private static String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    private void appendStochastics(StringBuilder message, Map<String, StochasticResult> stochasticValues) {
+        Set<String> labels = stochasticValues.values().stream()
+                .map(StochasticResult::label)
+                .collect(Collectors.toSet());
+        if (labels.size() == 1) {
+            String label = labels.iterator().next();
+            double avgK = stochasticValues.values().stream()
+                    .mapToDouble(s -> s.k().doubleValue())
+                    .average().orElse(0);
+            String tfs = stochasticValues.keySet().stream()
+                    .sorted()
+                    .collect(Collectors.joining("/"));
+            message.append("Stoch ").append(tfs).append(": ALL <b>")
+                   .append(label).append("</b> (%K ~").append(String.format("%.0f", avgK)).append(")\n");
+        } else {
+            String stochLine = stochasticValues.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(e -> e.getKey() + " %K=" + e.getValue().k() + " (" + e.getValue().label() + ")")
+                    .collect(Collectors.joining(" \u00b7 "));
+            message.append("Stoch: ").append(stochLine).append("\n");
+        }
     }
 
     private double inferStopPercent(String symbol) {
@@ -313,7 +356,7 @@ public class NotificationService {
         if (symbol.startsWith("CS.") || symbol.startsWith("CC.")) return stopPercentCommodity;
         return stopPercentCrypto;
     }
-    
+
     public void sendRawNotification(String title, String message) {
         telegramNotificationService.send(title, message);
     }

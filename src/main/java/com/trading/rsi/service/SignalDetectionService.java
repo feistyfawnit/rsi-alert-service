@@ -178,6 +178,13 @@ public class SignalDetectionService {
         if (signalType != null && cooldownService.shouldAlert(instrument.getSymbol(), signalType)) {
             boolean isFullSignal = alignedCount >= totalTimeframes;
 
+            // Suppress partial/watch signals for crypto (volatile, need full alignment for reliable signals)
+            if (instrument.isCrypto() && !isFullSignal) {
+                log.debug("Suppressing {} for {} — crypto requires full signal alignment (avoid partial noise)",
+                        signalType, instrument.getName());
+                return;
+            }
+
             // Record full signals for trend tracking
             if (isFullSignal) {
                 trendDetectionService.recordSignal(instrument.getSymbol(), signalType);

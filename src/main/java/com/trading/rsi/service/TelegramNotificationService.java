@@ -48,7 +48,7 @@ public class TelegramNotificationService {
 
         WebClient client = webClientBuilder.baseUrl("https://api.telegram.org").build();
         for (String chatId : recipients) {
-            Map<String, String> payload = Map.of("chat_id", chatId, "text", text);
+            Map<String, String> payload = Map.of("chat_id", chatId, "text", text, "parse_mode", "HTML");
             client.post()
                     .uri("/bot" + botToken + "/sendMessage")
                     .bodyValue(payload)

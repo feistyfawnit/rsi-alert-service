@@ -62,7 +62,7 @@ rsi:
     stop-percent-commodity: 1.0
     
   trend:
-    ema-period: ${TREND_EMA_PERIOD:50}
+    ema-period: ${TREND_EMA_PERIOD:20}
     ema-timeframe: ${TREND_EMA_TIMEFRAME:1h}
     consecutive-signals-for-trend: ${TREND_CONSECUTIVE_SIGNALS:2}
     dip-rsi-threshold: ${TREND_DIP_RSI_THRESHOLD:60}
@@ -125,7 +125,7 @@ anomaly:
   enabled: ${ANOMALY_DETECTION_ENABLED:true}
   volume-spike:
     enabled: true
-    std-dev-threshold: 8.0
+    std-dev-threshold: 3.0
     lookback-periods: 30
     min-periods-before-alert: 20
     cooldown-minutes: 60

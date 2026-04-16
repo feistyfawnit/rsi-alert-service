@@ -59,6 +59,10 @@ public class Instrument {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
     
+    public boolean isCrypto() {
+        return type == InstrumentType.CRYPTO;
+    }
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

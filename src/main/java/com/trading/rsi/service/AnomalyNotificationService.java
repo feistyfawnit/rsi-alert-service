@@ -33,11 +33,6 @@ public class AnomalyNotificationService {
     @Async
     public void handleAnomalyEvent(AnomalyEvent event) {
         AnomalyAlert alert = event.getAlert();
-        String activePosition = appSettingsService.get(AppSettingsService.KEY_ACTIVE_POSITION, "");
-        if (activePosition == null || activePosition.isBlank()) {
-            log.debug("No active position — suppressing anomaly alert for {}", alert.getMarket());
-            return;
-        }
         if (alert.getSeverity() != AnomalyAlert.Severity.CRITICAL && isQuietHours()) {
             log.debug("Quiet hours — suppressing {} anomaly alert for {}", alert.getSeverity(), alert.getMarket());
             return;

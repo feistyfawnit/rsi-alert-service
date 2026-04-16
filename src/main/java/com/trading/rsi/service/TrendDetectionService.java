@@ -22,20 +22,24 @@ import java.util.concurrent.ConcurrentHashMap;
  * Detects strong trends using two methods (primary + fallback) and generates
  * TREND_BUY_DIP / TREND_SELL_RALLY signals when price pulls back within a confirmed trend.
  *
- * PRIMARY filter — EMA 50 on the 1h timeframe:
- *   If price > EMA50(1h) → STRONG_UPTREND. Suppress OVERBOUGHT sell signals immediately.
- *   If price < EMA50(1h) → STRONG_DOWNTREND. Suppress OVERSOLD buy signals immediately.
+ * PRIMARY filter — EMA 20 on the configured trend timeframe:
+ *   If price > EMA20(1h) → STRONG_UPTREND. Suppress OVERBOUGHT sell signals immediately.
+ *   If price < EMA20(1h) → STRONG_DOWNTREND. Suppress OVERSOLD buy signals immediately.
  *
- * FALLBACK filter — consecutive signal count (used when 1h EMA history not yet available):
+ * FALLBACK 1 — Price momentum (used when EMA history &lt; 20 candles):
+ *   If price moved &gt;1% over last 5 candles on the trend timeframe → STRONG_UPTREND / STRONG_DOWNTREND.
+ *   Requires only 6 candles of history — available immediately after warmup.
+ *
+ * FALLBACK 2 — Consecutive signal count (last resort):
  *   After 2+ consecutive OVERBOUGHT full signals → STRONG_UPTREND.
  *   After 2+ consecutive OVERSOLD full signals → STRONG_DOWNTREND.
  *
  * Dip entry (TREND_BUY_DIP):
  *   Triggered when fastest-TF RSI drops below 60 (pulled back from overbought >70)
- *   while price is still above EMA50(1h). This is the classic buy-the-dip setup.
+ *   while price is still above EMA20(1h). This is the classic buy-the-dip setup.
  *
  * Rally entry (TREND_SELL_RALLY):
- *   Triggered when fastest-TF RSI bounces above 40 while price is below EMA50(1h).
+ *   Triggered when fastest-TF RSI bounces above 40 while price is below EMA20(1h).
  */
 @Service
 @Slf4j
@@ -47,7 +51,7 @@ public class TrendDetectionService {
     private final EmaCalculator emaCalculator;
     private final PriceHistoryService priceHistoryService;
 
-    @Value("${rsi.trend.ema-period:50}")
+    @Value("${rsi.trend.ema-period:20}")
     private int emaPeriod;
 
     @Value("${rsi.trend.ema-timeframe:1h}")
@@ -67,6 +71,9 @@ public class TrendDetectionService {
 
     @Value("${rsi.trend.suppress-counter-trend:true}")
     private boolean suppressCounterTrend;
+
+    private static final int MOMENTUM_LOOKBACK = 5;
+    private static final double MOMENTUM_THRESHOLD_PCT = 1.0;
 
     // Tracks consecutive overbought signal count per symbol
     private final Map<String, Integer> consecutiveOverbought = new ConcurrentHashMap<>();
@@ -117,17 +124,25 @@ public class TrendDetectionService {
 
     /**
      * Get current trend state for a symbol.
-     * PRIMARY: checks EMA 50 on 1h timeframe.
-     * FALLBACK: consecutive signal count if EMA data unavailable.
+     * PRIMARY: EMA 20 on 1h timeframe.
+     * FALLBACK 1: Price momentum over last MOMENTUM_LOOKBACK candles.
+     * FALLBACK 2: Consecutive signal count if both EMA and momentum unavailable.
      */
     public TrendState getTrendState(String symbol) {
-        // PRIMARY: EMA 50 on the configured trend timeframe
+        // PRIMARY: EMA 20 on the configured trend timeframe
         Boolean aboveEma = getPriceVsEma(symbol);
         if (aboveEma != null) {
             return aboveEma ? TrendState.STRONG_UPTREND : TrendState.STRONG_DOWNTREND;
         }
 
-        // FALLBACK: consecutive signal count
+        // FALLBACK 1: Price momentum — needs only MOMENTUM_LOOKBACK + 1 candles
+        double changePct = getMomentumChangePct(symbol);
+        if (!Double.isNaN(changePct)) {
+            if (changePct > MOMENTUM_THRESHOLD_PCT) return TrendState.STRONG_UPTREND;
+            if (changePct < -MOMENTUM_THRESHOLD_PCT) return TrendState.STRONG_DOWNTREND;
+        }
+
+        // FALLBACK 2: consecutive signal count
         Instant now = Instant.now();
         int obCount = consecutiveOverbought.getOrDefault(symbol, 0);
         Instant lastOb = lastOverboughtTime.get(symbol);
@@ -147,7 +162,7 @@ public class TrendDetectionService {
     }
 
     /**
-     * Compute price vs EMA50 for the trend timeframe.
+     * Compute price vs EMA for the trend timeframe.
      * Returns true = price above EMA (uptrend), false = below (downtrend), null = insufficient data.
      */
     private Boolean getPriceVsEma(String symbol) {
@@ -171,12 +186,17 @@ public class TrendDetectionService {
     public String getTrendReason(String symbol) {
         Boolean aboveEma = getPriceVsEma(symbol);
         if (aboveEma != null) {
-            return String.format("price %s EMA%d(%s)", aboveEma ? ">" : "<", emaPeriod, emaTrendTimeframe);
+            return String.format("price %s EMA%d(%s)", aboveEma ? "above" : "below", emaPeriod, emaTrendTimeframe);
+        }
+        double changePct = getMomentumChangePct(symbol);
+        if (!Double.isNaN(changePct) && (changePct > MOMENTUM_THRESHOLD_PCT || changePct < -MOMENTUM_THRESHOLD_PCT)) {
+            return String.format("%.1f%% move in %d %s candles (momentum proxy)",
+                    changePct, MOMENTUM_LOOKBACK, emaTrendTimeframe);
         }
         int obCount = consecutiveOverbought.getOrDefault(symbol, 0);
         int osCount = consecutiveOversold.getOrDefault(symbol, 0);
         int count = Math.max(obCount, osCount);
-        return String.format("%d consecutive full signals (EMA data building up)", count);
+        return String.format("%d consecutive full signals", count);
     }
 
     /**
@@ -196,17 +216,13 @@ public class TrendDetectionService {
     /**
      * Whether to suppress a counter-trend signal.
      * OVERBOUGHT suppressed in uptrend; OVERSOLD suppressed in downtrend.
-     * Logs the reason (EMA-based or consecutive-based).
+     * Logs the reason (EMA-based, momentum-based, or consecutive-based).
      */
     public boolean shouldSuppressCounterTrend(String symbol, SignalLog.SignalType signalType) {
         if (!suppressCounterTrend) return false;
 
         TrendState trend = getTrendState(symbol);
-        boolean emaAvailable = getPriceVsEma(symbol) != null;
-        String reason = emaAvailable
-                ? String.format("price vs EMA%d(%s)", emaPeriod, emaTrendTimeframe)
-                : String.format("%d consecutive signals", consecutiveOverbought.getOrDefault(symbol,
-                    consecutiveOversold.getOrDefault(symbol, 0)));
+        String reason = getTrendReason(symbol);
 
         if (trend == TrendState.STRONG_UPTREND && signalType == SignalLog.SignalType.OVERBOUGHT) {
             log.info("Suppressing OVERBOUGHT sell signal for {} — strong uptrend ({}) — consider BUY THE DIP instead",
@@ -226,11 +242,11 @@ public class TrendDetectionService {
      * or a rally in a downtrend (sell opportunity).
      *
      * TREND_BUY_DIP: fastest TF RSI has pulled back below dipRsiThreshold (default 60)
-     *   from an overbought level, while price is still above EMA50(1h). This means the
-     *   short-term momentum cooled but the trend is intact — classic buy-the-dip.
+     *   while price remains above EMA20(1h). Higher TFs staying elevated is expected in a
+     *   strong uptrend and is not a disqualifier — it confirms the trend is intact.
      *
      * TREND_SELL_RALLY: fastest TF RSI bounced above rallyRsiThreshold (default 40)
-     *   while price is still below EMA50(1h). Short-term bounce in a downtrend.
+     *   while price remains below EMA20(1h). Lower TFs staying depressed confirms downtrend.
      *
      * Called on every poll cycle.
      */
@@ -244,7 +260,7 @@ public class TrendDetectionService {
         double fastRsi = fastestRsi.doubleValue();
 
         if (trend == TrendState.STRONG_UPTREND) {
-            // RSI pulled back below threshold (cooled from overbought) — dip in uptrend
+            // Fastest TF RSI pulled back below threshold while price remains in uptrend
             if (fastRsi < dipRsiThreshold && fastRsi > 30) {
                 SignalLog.SignalType type = SignalLog.SignalType.TREND_BUY_DIP;
                 if (cooldownService.shouldAlert(instrument.getSymbol(), type)) {
@@ -272,7 +288,7 @@ public class TrendDetectionService {
                 }
             }
         } else if (trend == TrendState.STRONG_DOWNTREND) {
-            // RSI bounced above threshold (cooled from oversold) — rally in downtrend
+            // Fastest TF RSI bounced above threshold while price remains in downtrend
             if (fastRsi > rallyRsiThreshold && fastRsi < 70) {
                 SignalLog.SignalType type = SignalLog.SignalType.TREND_SELL_RALLY;
                 if (cooldownService.shouldAlert(instrument.getSymbol(), type)) {
@@ -300,6 +316,26 @@ public class TrendDetectionService {
                 }
             }
         }
+    }
+
+    /**
+     * Computes the % price change over the last MOMENTUM_LOOKBACK candles on the trend timeframe.
+     * Returns Double.NaN if insufficient history is available.
+     */
+    private double getMomentumChangePct(String symbol) {
+        String key = priceHistoryService.buildKey(symbol, emaTrendTimeframe);
+        List<BigDecimal> history = priceHistoryService.getPriceHistory(key);
+        if (history == null || history.size() <= MOMENTUM_LOOKBACK) return Double.NaN;
+        BigDecimal current = history.get(history.size() - 1);
+        BigDecimal reference = history.get(history.size() - 1 - MOMENTUM_LOOKBACK);
+        if (reference.compareTo(BigDecimal.ZERO) == 0) return Double.NaN;
+        double changePct = current.subtract(reference)
+                .divide(reference, 8, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .doubleValue();
+        log.debug("Momentum {} ({}): {}% over {} candles",
+                symbol, emaTrendTimeframe, String.format("%.2f", changePct), MOMENTUM_LOOKBACK);
+        return changePct;
     }
 
     private BigDecimal getFastestRsi(Map<String, BigDecimal> rsiValues, String timeframesConfig) {
