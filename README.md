@@ -16,7 +16,8 @@ A production-grade Spring Boot service that monitors financial instruments for m
 - ✅ Volume anomaly detection (σ-based) + Polymarket geopolitical odds monitor
 - ✅ Claude AI signal enrichment (optional)
 - ✅ Signal CSV archival with outcome backfill (1h/4h/24h price tracking)
-- ✅ REST API for instruments, signals, settings, retrospective analysis
+- ✅ Auto P&L tracking — positions opened on signal, TP/SL checked hourly, daily markdown report
+- ✅ REST API for instruments, signals, settings, positions, retrospective analysis
 - ✅ Auto-trading scaffolded (Phase 4 — hard-disabled, requires demo validation)
 
 ## Tech Stack

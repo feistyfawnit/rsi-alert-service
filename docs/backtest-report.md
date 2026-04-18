@@ -300,13 +300,19 @@ Based on backtest evidence, here is the revised priority order:
 
 ### P1 — Ship immediately
 
-| # | Item | Justification |
-|---|------|---------------|
-| 1 | **Trend-dip dedupe + price gate** (new) | Eliminates ~70% of the 146 TREND_BUY_DIP spam signals. Single biggest fatigue reducer. |
-| 2 | **Disable or heavily gate TREND_SELL_RALLY** (new) | 0% TP rate, −0.79R expectancy across 48 signals. This signal is actively harmful. |
-| 3 | **EMA hysteresis (±0.1%)** (new) | Prevents BCH-style direction whipsaw. Reduces both BUY_DIP and SELL_RALLY spam near the EMA. |
-| 4 | **Telegram bot commands** (/mute, /position, /status) | Existing P1, keep. Gives manual override for fatigue — critical UX. |
-| 5 | **Fix active_position auto-set** (new) | Bug fix: TREND signals shouldn't auto-set position. 5+ days of false "open position" warnings. |
+| # | Item | Justification | Status |
+|---|------|---------------|--------|
+| 1 | **Trend-dip dedupe + price gate** (new) | Eliminates ~70% of the 146 TREND_BUY_DIP spam signals. Single biggest fatigue reducer. | ✅ Shipped 18 Apr |
+| 2 | **Disable or heavily gate TREND_SELL_RALLY** (new) | 0% TP rate, −0.79R expectancy across 48 signals. This signal is actively harmful. | ✅ Shipped 18 Apr |
+| 3 | **EMA hysteresis (±0.1%)** (new) | Prevents BCH-style direction whipsaw. Reduces both BUY_DIP and SELL_RALLY spam near the EMA. | ✅ Shipped 18 Apr |
+| 4 | **Telegram bot commands** (/mute, /position, /status) | Existing P1, keep. Gives manual override for fatigue — critical UX. | ⏳ Not started |
+| 5 | **Fix active_position auto-set** (new) | Bug fix: TREND signals shouldn't auto-set position. 5+ days of false "open position" warnings. | ✅ Shipped 18 Apr |
+
+### P1.5 — P&L Tracking Foundation
+
+| # | Item | Justification | Status |
+|---|------|---------------|--------|
+| 5.5 | **Auto P&L tracking + daily report** | Replaces manual SQL backtests. `position_outcomes` table, hourly exit check, `reports/pnl-report.md` auto-generated daily. `GET /api/positions/pnl-summary` for JSON. `make pnl-report` for on-demand. | ✅ Shipped 18 Apr |
 
 ### P2 — Ship this sprint
 

@@ -71,6 +71,20 @@ Returns per-timeframe RSI values, distance from thresholds, and verdict (FULL / 
 
 ---
 
+## Positions & P&L Tracking — `/api/positions`
+
+Tracks outcomes of actionable signals (OVERSOLD, OVERBOUGHT, TREND_BUY_DIP, TREND_SELL_RALLY). Positions are opened automatically on signal, checked hourly for TP/SL hits, and auto-closed after 24h.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/positions/pnl-summary` | Win rate, avg P&L, expectancy by signal type (JSON) |
+| `GET` | `/api/positions/pnl-report` | Human-readable markdown report |
+| `POST` | `/api/positions/pnl-report/write` | Force-write report to `reports/pnl-report.md` |
+
+The report auto-writes daily at 06:00 UTC to `reports/pnl-report.md` (host-mounted volume). On-demand: `make pnl-report`.
+
+---
+
 ## Per-Instrument Muting — `/api/signals/mute`
 
 Suppresses **all** notifications (FULL, PARTIAL, WATCH) for a specific instrument. Persisted to DB — survives restarts.

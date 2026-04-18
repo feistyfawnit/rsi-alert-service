@@ -1,0 +1,68 @@
+package com.trading.rsi.domain;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+
+@Entity
+@Table(name = "position_outcomes",
+    indexes = {
+        @Index(name = "idx_pos_symbol", columnList = "symbol"),
+        @Index(name = "idx_pos_exit_time", columnList = "exit_time")
+    }
+)
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class PositionOutcome {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false)
+    private String symbol;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "signal_type", nullable = false)
+    private SignalLog.SignalType signalType;
+
+    @Column(name = "entry_price", nullable = false, precision = 20, scale = 8)
+    private BigDecimal entryPrice;
+
+    @Column(name = "entry_time", nullable = false)
+    private Instant entryTime;
+
+    @Column(name = "exit_price", precision = 20, scale = 8)
+    private BigDecimal exitPrice;
+
+    @Column(name = "exit_time")
+    private Instant exitTime;
+
+    @Column(name = "tp_price", nullable = false, precision = 20, scale = 8)
+    private BigDecimal tpPrice;
+
+    @Column(name = "sl_price", nullable = false, precision = 20, scale = 8)
+    private BigDecimal slPrice;
+
+    @Column(name = "tp_hit")
+    private Boolean tpHit;
+
+    @Column(name = "sl_hit")
+    private Boolean slHit;
+
+    @Column(name = "pnl_pct", precision = 10, scale = 4)
+    private BigDecimal pnlPct;
+
+    @Column(name = "holding_hours")
+    private Double holdingHours;
+
+    @Column(name = "is_long", nullable = false)
+    private Boolean isLong;
+}

@@ -50,7 +50,9 @@ If you are reviewing or changing this repo, read in this order:
 ```bash
 make up
 make logs
+make pnl-report
 curl http://localhost:8080/actuator/health
 curl http://localhost:8080/api/instruments/enabled
 curl http://localhost:8080/api/signals/rsi-snapshot
+curl http://localhost:8080/api/positions/pnl-summary
 ```

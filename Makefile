@@ -1,4 +1,4 @@
-.PHONY: up down logs test test-anomaly ps clean
+.PHONY: up down logs test test-anomaly ps clean pnl-report
 
 up:
 	@colima status > /dev/null 2>&1 || (echo "Starting Colima..." && colima start)
@@ -21,3 +21,8 @@ ps:
 
 clean:
 	docker-compose down -v
+
+pnl-report:
+	@mkdir -p reports
+	@curl -s http://localhost:8080/api/positions/pnl-report > reports/pnl-report.md
+	@echo "P&L report written to reports/pnl-report.md"
