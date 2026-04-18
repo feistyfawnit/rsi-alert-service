@@ -1,0 +1,203 @@
+package com.trading.rsi.service;
+
+import com.trading.rsi.domain.Instrument;
+import com.trading.rsi.domain.SignalLog;
+import com.trading.rsi.event.SignalEvent;
+import com.trading.rsi.model.Candle;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * Tests for TREND_BUY_DIP dedupe logic in TrendDetectionService.
+ */
+@ExtendWith(MockitoExtension.class)
+class TrendDetectionServiceTest {
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private SignalCooldownService cooldownService;
+
+    @Mock
+    private EmaCalculator emaCalculator;
+
+    @Mock
+    private PriceHistoryService priceHistoryService;
+
+    @InjectMocks
+    private TrendDetectionService trendDetectionService;
+
+    private Instrument instrument;
+    private Candle triggerCandle;
+
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(trendDetectionService, "emaPeriod", 20);
+        ReflectionTestUtils.setField(trendDetectionService, "emaTrendTimeframe", "1h");
+        ReflectionTestUtils.setField(trendDetectionService, "consecutiveSignalsForTrend", 2);
+        ReflectionTestUtils.setField(trendDetectionService, "dipRsiThreshold", 60.0);
+        ReflectionTestUtils.setField(trendDetectionService, "rallyRsiThreshold", 40.0);
+        ReflectionTestUtils.setField(trendDetectionService, "trendTimeoutHours", 12);
+        ReflectionTestUtils.setField(trendDetectionService, "suppressCounterTrend", true);
+
+        instrument = Instrument.builder()
+                .symbol("SOLUSDT")
+                .name("Solana")
+                .source(Instrument.DataSource.BINANCE)
+                .type(Instrument.InstrumentType.CRYPTO)
+                .enabled(true)
+                .timeframes("15m,1h,4h")
+                .oversoldThreshold(30)
+                .overboughtThreshold(70)
+                .build();
+
+        triggerCandle = Candle.builder()
+                .timestamp(Instant.now())
+                .open(new BigDecimal("88"))
+                .high(new BigDecimal("89"))
+                .low(new BigDecimal("87"))
+                .close(new BigDecimal("88"))
+                .volume(new BigDecimal("10000"))
+                .build();
+    }
+
+    /**
+     * Stub priceHistoryService + emaCalculator so getTrendState() returns STRONG_UPTREND.
+     */
+    private void stubUptrend() {
+        List<BigDecimal> history = IntStream.range(0, 25)
+                .mapToObj(i -> BigDecimal.valueOf(80 + i))
+                .toList();
+        lenient().when(priceHistoryService.buildKey("SOLUSDT", "1h")).thenReturn("SOLUSDT:1h");
+        lenient().when(priceHistoryService.getPriceHistory("SOLUSDT:1h")).thenReturn(history);
+        lenient().when(emaCalculator.isPriceAboveEma(history, 20)).thenReturn(true);
+        lenient().when(emaCalculator.calculate(history, 20)).thenReturn(BigDecimal.valueOf(90));
+    }
+
+    // ── Scenario 1: Repeat dip at similar price, RSI never recovers → SUPPRESSED ──
+
+    @Test
+    void dipDedupe_similarPrice_noRsiRecovery_secondSuppressed() {
+        stubUptrend();
+        when(cooldownService.shouldAlert(eq("SOLUSDT"), eq(SignalLog.SignalType.TREND_BUY_DIP)))
+                .thenReturn(true);
+
+        BigDecimal price1 = new BigDecimal("88.00");
+        BigDecimal price2 = new BigDecimal("88.10"); // 0.11% move — below 0.3% threshold
+
+        // RSI at 55 → below dipRsiThreshold (60) and above 30 → triggers dip
+        Map<String, BigDecimal> dipRsi = Map.of(
+                "15m", new BigDecimal("55"),
+                "1h", new BigDecimal("65"),
+                "4h", new BigDecimal("72")
+        );
+
+        // First dip call → should fire
+        trendDetectionService.checkForTrendEntry(instrument, dipRsi, price1, triggerCandle);
+        verify(eventPublisher, times(1)).publishEvent(any(SignalEvent.class));
+
+        // Second dip call at similar price, RSI stayed below 60 → should be SUPPRESSED
+        trendDetectionService.checkForTrendEntry(instrument, dipRsi, price2, triggerCandle);
+        verify(eventPublisher, times(1)).publishEvent(any(SignalEvent.class)); // still 1
+    }
+
+    // ── Scenario 2: Repeat dip at similar price, RSI recovers above 60 → FIRES ──
+
+    @Test
+    void dipDedupe_similarPrice_rsiRecovers_secondFires() {
+        stubUptrend();
+        when(cooldownService.shouldAlert(eq("SOLUSDT"), eq(SignalLog.SignalType.TREND_BUY_DIP)))
+                .thenReturn(true);
+
+        BigDecimal price1 = new BigDecimal("88.00");
+        BigDecimal price2 = new BigDecimal("88.10"); // similar price
+
+        Map<String, BigDecimal> dipRsi = Map.of(
+                "15m", new BigDecimal("55"),
+                "1h", new BigDecimal("65"),
+                "4h", new BigDecimal("72")
+        );
+
+        // First dip → fires
+        trendDetectionService.checkForTrendEntry(instrument, dipRsi, price1, triggerCandle);
+        verify(eventPublisher, times(1)).publishEvent(any(SignalEvent.class));
+
+        // RSI recovers above threshold (poll cycle with RSI >= 60)
+        Map<String, BigDecimal> recoveredRsi = Map.of(
+                "15m", new BigDecimal("63"),
+                "1h", new BigDecimal("68"),
+                "4h", new BigDecimal("74")
+        );
+        trendDetectionService.checkForTrendEntry(instrument, recoveredRsi, price2, triggerCandle);
+        // RSI=63 >= 60 → sets dipRsiRecovered=true; RSI not < 60, so no new dip signal
+
+        // Second dip after recovery → should fire
+        trendDetectionService.checkForTrendEntry(instrument, dipRsi, price2, triggerCandle);
+        verify(eventPublisher, times(2)).publishEvent(any(SignalEvent.class));
+    }
+
+    // ── Scenario 3: Repeat dip where price moved >0.3% → FIRES ──
+
+    @Test
+    void dipDedupe_priceMoved_secondFires() {
+        stubUptrend();
+        when(cooldownService.shouldAlert(eq("SOLUSDT"), eq(SignalLog.SignalType.TREND_BUY_DIP)))
+                .thenReturn(true);
+
+        BigDecimal price1 = new BigDecimal("88.00");
+        BigDecimal price2 = new BigDecimal("88.50"); // 0.57% move — above 0.3% threshold
+
+        Map<String, BigDecimal> dipRsi = Map.of(
+                "15m", new BigDecimal("55"),
+                "1h", new BigDecimal("65"),
+                "4h", new BigDecimal("72")
+        );
+
+        // First dip → fires
+        trendDetectionService.checkForTrendEntry(instrument, dipRsi, price1, triggerCandle);
+        verify(eventPublisher, times(1)).publishEvent(any(SignalEvent.class));
+
+        // Second dip at >0.3% different price (RSI never recovered) → should FIRE
+        trendDetectionService.checkForTrendEntry(instrument, dipRsi, price2, triggerCandle);
+        verify(eventPublisher, times(2)).publishEvent(any(SignalEvent.class));
+    }
+
+    // ── Verify first dip always fires (sanity) ──
+
+    @Test
+    void dipDedupe_firstDip_alwaysFires() {
+        stubUptrend();
+        when(cooldownService.shouldAlert(eq("SOLUSDT"), eq(SignalLog.SignalType.TREND_BUY_DIP)))
+                .thenReturn(true);
+
+        Map<String, BigDecimal> dipRsi = Map.of(
+                "15m", new BigDecimal("55"),
+                "1h", new BigDecimal("65"),
+                "4h", new BigDecimal("72")
+        );
+
+        trendDetectionService.checkForTrendEntry(instrument, dipRsi, new BigDecimal("88.00"), triggerCandle);
+
+        ArgumentCaptor<SignalEvent> captor = ArgumentCaptor.forClass(SignalEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertEquals(SignalLog.SignalType.TREND_BUY_DIP, captor.getValue().getSignal().getSignalType());
+    }
+}

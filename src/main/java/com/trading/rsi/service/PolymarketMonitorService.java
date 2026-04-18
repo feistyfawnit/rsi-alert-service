@@ -41,7 +41,7 @@ public class PolymarketMonitorService {
         }
 
         String activePosition = appSettingsService.get(AppSettingsService.KEY_ACTIVE_POSITION, "");
-        if (activePosition.isBlank()) {
+        if (activePosition == null || activePosition.isBlank()) {
             log.debug("Polymarket polling skipped — no active position");
             return;
         }

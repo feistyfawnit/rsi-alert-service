@@ -42,10 +42,10 @@ public class SignalLogService {
         signalLogRepository.save(logEntry);
         log.info("Signal logged: {} {} at ${}", signal.getSymbol(), signal.getSignalType(), signal.getCurrentPrice());
 
+        // Only OVERBOUGHT/OVERSOLD are full signals that set active_position
+        // TREND signals are suggestions, not trades — do NOT auto-set position
         boolean isFullSignal = signal.getSignalType() == SignalLog.SignalType.OVERSOLD
-                || signal.getSignalType() == SignalLog.SignalType.OVERBOUGHT
-                || signal.getSignalType() == SignalLog.SignalType.TREND_BUY_DIP
-                || signal.getSignalType() == SignalLog.SignalType.TREND_SELL_RALLY;
+                || signal.getSignalType() == SignalLog.SignalType.OVERBOUGHT;
         if (isFullSignal) {
             String current = appSettingsService.get(AppSettingsService.KEY_ACTIVE_POSITION, "");
             if (current == null || current.isBlank()) {

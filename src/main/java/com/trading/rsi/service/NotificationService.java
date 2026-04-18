@@ -15,9 +15,12 @@ import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,6 +35,7 @@ public class NotificationService {
     private final AppSettingsService appSettingsService;
     private final TelegramNotificationService telegramNotificationService;
     private final TrendDetectionService trendDetectionService;
+    private final VolumeAnomalyDetector volumeAnomalyDetector;
 
     private final AtomicBoolean noTradeModeActive = new AtomicBoolean(false);
     private final Set<String> mutedSymbols = ConcurrentHashMap.newKeySet();
@@ -246,6 +250,24 @@ public class NotificationService {
 
         message.append(buildDemoGuidance(signal));
 
+        // Volume anomaly context (pre-entry enrichment — Option A)
+        Optional<VolumeAnomalyDetector.RecentAnomaly> recentAnomaly =
+                volumeAnomalyDetector.getRecentAnomaly(signal.getSymbol(), 2);
+        if (recentAnomaly.isPresent()) {
+            VolumeAnomalyDetector.RecentAnomaly a = recentAnomaly.get();
+            long minutesAgo = ChronoUnit.MINUTES.between(a.detectedAt(), Instant.now());
+            boolean signalIsLong = signal.getSignalType() == SignalLog.SignalType.OVERSOLD
+                    || signal.getSignalType() == SignalLog.SignalType.PARTIAL_OVERSOLD
+                    || signal.getSignalType() == SignalLog.SignalType.WATCH_OVERSOLD
+                    || signal.getSignalType() == SignalLog.SignalType.TREND_BUY_DIP;
+            boolean anomalyIsBullish = "bullish".equalsIgnoreCase(a.direction());
+            boolean aligns = (signalIsLong && anomalyIsBullish) || (!signalIsLong && !anomalyIsBullish);
+            String emoji = aligns ? "\u2705" : "\u26A0\uFE0F";
+            String status = aligns ? "confirms" : "contradicts";
+            message.append(String.format("\n\uD83D\uDCA1 Volume spike %.1fσ %s (%dm ago) — <b>%s</b> %s",
+                    a.zScore(), a.direction(), minutesAgo, status, emoji));
+        }
+
         if (aiContext != null && !aiContext.isBlank()) {
             message.append("\n\uD83D\uDCF0 ").append(escapeHtml(aiContext));
         }
@@ -266,7 +288,10 @@ public class NotificationService {
 
         BigDecimal entry = signal.getCurrentPrice();
         double effectiveStopPct = isTrendSignal ? stopPct * 0.5 : stopPct;
-        long stopPts = Math.round(entry.doubleValue() * effectiveStopPct / 100.0);
+        long stopPts = Math.max(
+                Math.round(entry.doubleValue() * effectiveStopPct / 100.0),
+                Math.max(Math.round(entry.doubleValue() * 0.002), 2)  // floor: 0.2% of price or 2pts (IG minDealDistance proxy)
+        );
         long limitPts = isTrendSignal ? stopPts * 3 : stopPts * 2;
 
         BigDecimal riskAmount = BigDecimal.valueOf(demoAccountBalance)

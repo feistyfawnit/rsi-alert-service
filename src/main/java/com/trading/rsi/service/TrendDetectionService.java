@@ -72,6 +72,9 @@ public class TrendDetectionService {
     @Value("${rsi.trend.suppress-counter-trend:true}")
     private boolean suppressCounterTrend;
 
+    @Value("${rsi.trend.sell-rally-enabled:false}")
+    private boolean sellRallyEnabled;
+
     private static final int MOMENTUM_LOOKBACK = 5;
     private static final double MOMENTUM_THRESHOLD_PCT = 1.0;
 
@@ -80,6 +83,10 @@ public class TrendDetectionService {
     private final Map<String, Integer> consecutiveOversold = new ConcurrentHashMap<>();
     private final Map<String, Instant> lastOverboughtTime = new ConcurrentHashMap<>();
     private final Map<String, Instant> lastOversoldTime = new ConcurrentHashMap<>();
+
+    // TREND_BUY_DIP dedupe: suppress repeat dip alerts unless price moved >0.3% or RSI recovered above threshold
+    private final Map<String, BigDecimal> lastDipAlertPrice = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> dipRsiRecovered = new ConcurrentHashMap<>();
 
     public enum TrendState {
         STRONG_UPTREND,
@@ -163,19 +170,24 @@ public class TrendDetectionService {
 
     /**
      * Compute price vs EMA for the trend timeframe.
-     * Returns true = price above EMA (uptrend), false = below (downtrend), null = insufficient data.
+     * Returns true = price above EMA (uptrend), false = below (downtrend), null = insufficient data or too close (hysteresis).
+     * Hysteresis: price within ±0.1% of EMA returns null (NEUTRAL) to prevent whipsaw.
      */
     private Boolean getPriceVsEma(String symbol) {
         String key = priceHistoryService.buildKey(symbol, emaTrendTimeframe);
         List<BigDecimal> history = priceHistoryService.getPriceHistory(key);
         if (history == null || history.size() < emaPeriod) return null;
-        Boolean above = emaCalculator.isPriceAboveEma(history, emaPeriod);
-        if (above != null) {
-            BigDecimal ema = emaCalculator.calculate(history, emaPeriod);
-            log.debug("EMA{} ({}) for {}: {} | price {} EMA",
-                    emaPeriod, emaTrendTimeframe, symbol, ema,
-                    above ? ">" : "<");
-        }
+        BigDecimal ema = emaCalculator.calculate(history, emaPeriod);
+        if (ema == null) return null;
+        BigDecimal currentPrice = history.get(history.size() - 1);
+        double pctFromEma = currentPrice.subtract(ema)
+                .divide(ema, 8, RoundingMode.HALF_UP).doubleValue() * 100;
+        // Hysteresis: must be >0.1% away from EMA to flip
+        if (Math.abs(pctFromEma) < 0.1) return null; // NEUTRAL — too close to call
+        boolean above = pctFromEma > 0;
+        log.debug("EMA{} ({}) for {}: {} | price {} EMA ({:.2f}%)",
+                emaPeriod, emaTrendTimeframe, symbol, ema,
+                above ? ">" : "<", pctFromEma);
         return above;
     }
 
@@ -259,9 +271,26 @@ public class TrendDetectionService {
         if (fastestRsi == null) return;
         double fastRsi = fastestRsi.doubleValue();
 
+        // Track RSI recovery for TREND_BUY_DIP dedupe
+        if (fastRsi >= dipRsiThreshold) {
+            dipRsiRecovered.put(instrument.getSymbol(), true);
+        }
+
         if (trend == TrendState.STRONG_UPTREND) {
             // Fastest TF RSI pulled back below threshold while price remains in uptrend
             if (fastRsi < dipRsiThreshold && fastRsi > 30) {
+                // Dedupe: require price move >0.3% or RSI recovery above threshold
+                BigDecimal lastDipPrice = lastDipAlertPrice.get(instrument.getSymbol());
+                boolean recovered = dipRsiRecovered.getOrDefault(instrument.getSymbol(), true);
+                if (lastDipPrice != null && !recovered) {
+                    double pctMove = Math.abs(currentPrice.subtract(lastDipPrice)
+                            .divide(lastDipPrice, 8, RoundingMode.HALF_UP).doubleValue() * 100);
+                    if (pctMove < 0.3) {
+                        log.debug("TREND_BUY_DIP suppressed for {} — price {}% from last dip, RSI not recovered",
+                                instrument.getSymbol(), String.format("%.2f", pctMove));
+                        return;
+                    }
+                }
                 SignalLog.SignalType type = SignalLog.SignalType.TREND_BUY_DIP;
                 if (cooldownService.shouldAlert(instrument.getSymbol(), type)) {
                     int obCount = consecutiveOverbought.getOrDefault(instrument.getSymbol(), 0);
@@ -285,10 +314,13 @@ public class TrendDetectionService {
                             currentPrice, emaPeriod, emaTrendTimeframe);
                     eventPublisher.publishEvent(new SignalEvent(this, signal));
                     cooldownService.recordAlert(instrument.getSymbol(), type);
+                    lastDipAlertPrice.put(instrument.getSymbol(), currentPrice);
+                    dipRsiRecovered.put(instrument.getSymbol(), false);
                 }
             }
-        } else if (trend == TrendState.STRONG_DOWNTREND) {
+        } else if (trend == TrendState.STRONG_DOWNTREND && sellRallyEnabled) {
             // Fastest TF RSI bounced above threshold while price remains in downtrend
+            // DISABLED by default (sellRallyEnabled=false) — backtest shows 0% TP, -0.79R
             if (fastRsi > rallyRsiThreshold && fastRsi < 70) {
                 SignalLog.SignalType type = SignalLog.SignalType.TREND_SELL_RALLY;
                 if (cooldownService.shouldAlert(instrument.getSymbol(), type)) {

@@ -1,7 +1,9 @@
 package com.trading.rsi.service;
 
+import com.trading.rsi.domain.SignalLog;
 import com.trading.rsi.event.AnomalyEvent;
 import com.trading.rsi.model.AnomalyAlert;
+import com.trading.rsi.repository.SignalLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,8 +11,11 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 
 @Service
 @Slf4j
@@ -19,6 +24,7 @@ public class AnomalyNotificationService {
 
     private final AppSettingsService appSettingsService;
     private final TelegramNotificationService telegramNotificationService;
+    private final SignalLogRepository signalLogRepository;
 
     @Value("${rsi.quiet-hours.enabled:true}")
     private boolean quietHoursEnabled;
@@ -38,6 +44,18 @@ public class AnomalyNotificationService {
             return;
         }
         sendUrgentAlert(alert);
+    }
+
+    private Optional<SignalLog> findRecentSignal(String symbol) {
+        return signalLogRepository.findFirstBySymbolAndCreatedAtAfterOrderByCreatedAtDesc(
+                symbol, LocalDateTime.now().minusHours(6));
+    }
+
+    private String signalDirection(SignalLog.SignalType type) {
+        return switch (type) {
+            case OVERSOLD, PARTIAL_OVERSOLD, WATCH_OVERSOLD, TREND_BUY_DIP -> "LONG";
+            case OVERBOUGHT, PARTIAL_OVERBOUGHT, WATCH_OVERBOUGHT, TREND_SELL_RALLY -> "SHORT";
+        };
     }
 
     private boolean hasOpenPositionFor(AnomalyAlert alert) {
@@ -99,9 +117,24 @@ public class AnomalyNotificationService {
                 }
                 if (dirObj instanceof String dir) {
                     switch (dir) {
-                        case "bullish" -> sb.append("\uD83D\uDCC8 Direction: BULLISH candle — price rose on spike (buy pressure / breakout)\n");
-                        case "bearish" -> sb.append("\uD83D\uDCC9 Direction: BEARISH candle — price fell on spike (sell pressure / panic)\n");
+                        case "bullish" -> sb.append("📈 Direction: BULLISH candle — price rose on spike (buy pressure / breakout)\n");
+                        case "bearish" -> sb.append("📉 Direction: BEARISH candle — price fell on spike (sell pressure / panic)\n");
                         default -> sb.append("\u27A1\uFE0F Direction: Neutral candle — direction unclear\n");
+                    }
+                }
+                Object symbolObj = alert.getDetails().get("symbol");
+                if (symbolObj instanceof String sym) {
+                    Optional<SignalLog> recent = findRecentSignal(sym);
+                    if (recent.isPresent()) {
+                        SignalLog sig = recent.get();
+                        long hoursAgo = ChronoUnit.HOURS.between(sig.getCreatedAt(), LocalDateTime.now());
+                        String recDir = signalDirection(sig.getSignalType());
+                        String spikeDir = dirObj instanceof String d ? d : "";
+                        boolean aligns = ("LONG".equals(recDir) && "bullish".equals(spikeDir))
+                                || ("SHORT".equals(recDir) && "bearish".equals(spikeDir));
+                        sb.append(aligns
+                                ? String.format("\n\uD83D\uDCA1 Recent <b>%s</b> signal %dh ago \u2014 spike <b>confirms</b> \u2705\n", recDir, hoursAgo)
+                                : String.format("\n\u26A0\uFE0F Recent <b>%s</b> signal %dh ago \u2014 spike contradicts \u274C\n", recDir, hoursAgo));
                     }
                 }
             }

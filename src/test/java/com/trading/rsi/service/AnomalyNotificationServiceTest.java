@@ -2,6 +2,7 @@ package com.trading.rsi.service;
 
 import com.trading.rsi.event.AnomalyEvent;
 import com.trading.rsi.model.AnomalyAlert;
+import com.trading.rsi.repository.SignalLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +15,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,6 +27,9 @@ class AnomalyNotificationServiceTest {
     @Mock
     private TelegramNotificationService telegramNotificationService;
 
+    @Mock
+    private SignalLogRepository signalLogRepository;
+
     @InjectMocks
     private AnomalyNotificationService notificationService;
 
@@ -34,7 +39,7 @@ class AnomalyNotificationServiceTest {
     }
 
     @Test
-    void handleAnomalyEvent_noActivePosition_suppressesAlert() {
+    void handleAnomalyEvent_noActivePosition_sendsAlertWithoutPositionWarning() {
         when(appSettingsService.get(AppSettingsService.KEY_ACTIVE_POSITION, "")).thenReturn("");
 
         AnomalyAlert alert = createVolumeAlert();
@@ -42,7 +47,8 @@ class AnomalyNotificationServiceTest {
 
         notificationService.handleAnomalyEvent(event);
 
-        verify(telegramNotificationService, never()).send(anyString(), anyString());
+        verify(telegramNotificationService, atLeastOnce()).send(anyString(), argThat(msg ->
+                !msg.contains("YOU HAVE AN OPEN POSITION")));
     }
 
     @Test

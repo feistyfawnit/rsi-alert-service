@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.Comparator;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -25,6 +26,7 @@ public class VolumeAnomalyDetector {
 
     private final Map<String, Deque<BigDecimal>> volumeHistory = new ConcurrentHashMap<>();
     private final Map<String, Instant> lastAlertTime = new ConcurrentHashMap<>();
+    private final Map<String, RecentAnomaly> lastAnomalyDetails = new ConcurrentHashMap<>();
 
     public void onNewCandle(String symbol, String instrumentName, String timeframe, Candle candle) {
         AnomalyProperties.VolumeSpikeConfig cfg = anomalyProperties.getVolumeSpike();
@@ -109,8 +111,25 @@ public class VolumeAnomalyDetector {
                         symbol, timeframe, String.format("%.1f", zScore),
                         String.format("%.0f", currentVolume), String.format("%.0f", mean));
                 eventPublisher.publishEvent(new AnomalyEvent(this, alert));
+                lastAnomalyDetails.put(key, new RecentAnomaly(direction, zScore, now));
             }
         }
     }
+
+    /**
+     * Returns the most recent volume anomaly for a symbol across all its timeframes,
+     * if it occurred within the specified window (e.g., last 2 hours).
+     * Used to enrich signal messages with volume context before entry.
+     */
+    public Optional<RecentAnomaly> getRecentAnomaly(String symbol, int lookbackHours) {
+        Instant cutoff = Instant.now().minus(lookbackHours, ChronoUnit.HOURS);
+        return lastAnomalyDetails.entrySet().stream()
+                .filter(e -> e.getKey().startsWith(symbol + ":"))
+                .filter(e -> e.getValue().detectedAt().isAfter(cutoff))
+                .max(Comparator.comparing(e -> e.getValue().detectedAt()))
+                .map(Map.Entry::getValue);
+    }
+
+    public record RecentAnomaly(String direction, double zScore, Instant detectedAt) {}
 }
 

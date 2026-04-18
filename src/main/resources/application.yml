@@ -69,6 +69,7 @@ rsi:
     rally-rsi-threshold: ${TREND_RALLY_RSI_THRESHOLD:40}
     trend-timeout-hours: ${TREND_TIMEOUT_HOURS:12}
     suppress-counter-trend: ${TREND_SUPPRESS_COUNTER:true}
+    sell-rally-enabled: ${TREND_SELL_RALLY_ENABLED:false}
 
   timeframes:
     - 1m
