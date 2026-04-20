@@ -175,7 +175,7 @@ watchlist:
     - symbol: BTCUSDT
       name: Bitcoin
       source: BINANCE
-      enabled: true
+      enabled: false
       type: CRYPTO
       oversold-threshold: 30
       overbought-threshold: 70
@@ -183,7 +183,7 @@ watchlist:
     - symbol: ETHUSDT
       name: Ethereum
       source: BINANCE
-      enabled: true
+      enabled: false
       type: CRYPTO
       oversold-threshold: 30
       overbought-threshold: 70
@@ -191,7 +191,7 @@ watchlist:
     - symbol: BCHUSDT
       name: Bitcoin Cash
       source: BINANCE
-      enabled: true
+      enabled: false
       type: CRYPTO
       oversold-threshold: 30
       overbought-threshold: 70
@@ -235,7 +235,7 @@ watchlist:
     - symbol: CC.D.LCO.USS.IP
       name: Oil (Brent)
       source: IG
-      enabled: true
+      enabled: false
       type: COMMODITY
       oversold-threshold: 30
       overbought-threshold: 70
@@ -243,7 +243,7 @@ watchlist:
     - symbol: IX.D.NASDAQ.CASH.IP
       name: Nasdaq 100
       source: IG
-      enabled: true
+      enabled: false
       type: INDEX
       oversold-threshold: 30
       overbought-threshold: 70
@@ -251,7 +251,7 @@ watchlist:
     - symbol: CS.D.USCSI.TODAY.IP
       name: Silver
       source: IG
-      enabled: true
+      enabled: false
       type: COMMODITY
       oversold-threshold: 30
       overbought-threshold: 70

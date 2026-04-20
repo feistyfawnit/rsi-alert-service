@@ -46,14 +46,15 @@ public class DataInitializer implements ApplicationRunner {
             } else {
                 Instrument instrument = existing.get();
                 instrument.setName(config.getName());
-                instrument.setEnabled(config.getEnabled());
+                // Preserve enabled state from DB - don't overwrite from YAML
+                // This allows runtime API toggles to persist across restarts
                 instrument.setSource(config.getSource());
                 instrument.setType(config.getType());
                 instrument.setOversoldThreshold(config.getOversoldThreshold());
                 instrument.setOverboughtThreshold(config.getOverboughtThreshold());
                 instrument.setTimeframes(config.getTimeframes());
                 instrumentRepository.save(instrument);
-                log.debug("Synced instrument from YAML: {} (enabled={})", config.getSymbol(), config.getEnabled());
+                log.debug("Synced instrument from YAML: {} (enabled={} - preserved from DB)", config.getSymbol(), instrument.getEnabled());
                 updated++;
             }
         }

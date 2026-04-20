@@ -94,8 +94,8 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 | Phase | Monthly Cost | Status |
 |-------|-------------|--------|
-| Phase 1 (crypto RSI + trend detection) | $0 local / $5 Railway / $0 AWS Free Tier | ✅ Ready to deploy |
-| Phase 2 (IG indices) | $5 Railway / $0-15 AWS | ✅ Ready — enable IG credentials |
+| Phase 1 (crypto RSI + trend detection) | $0 local / $0 AWS Free Tier / ~€15 post-free | ✅ Ready to deploy |
+| Phase 2 (IG indices) | $0-15 AWS | ✅ Ready — enable IG credentials |
 | Phase 3 (Claude AI) | $7-10 | ✅ Ready — add `CLAUDE_API_KEY` |
 | Phase 4 (auto-trading) | $5-10 | ⛔ Do not enable without 3+ months paper trading |
 | Phase 5 (anomaly) | $0 | ⏳ Volume spike + Polymarket monitor live; cross-correlation not built yet |
@@ -153,10 +153,10 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 | Item | Effort | Notes |
 |------|--------|-------|
-| ~~**Candle History Persistence (DB)**~~ | ~~4h~~ | ~~`PriceHistoryService` is in-memory only — all history lost on every restart. Affects RSI accuracy directly: 4h RSI needs 28 candles = 4.7 days of data; with persistence, RSI improves continuously over weeks. Without it, every restart resets to bare-minimum accuracy. Also eliminates warmup API calls to Binance on boot. Add `CandleHistory` JPA entity, persist on receipt, load on startup.~~ **COMPLETE — persists to PostgreSQL, loads on startup, eliminates warmup calls.** |
+| **✅ Candle History Persistence (DB)** | **COMPLETE** | `CandleHistory` entity persists to PostgreSQL, 2,885+ candles loaded on startup, RSI accuracy maintained across restarts. |
 | **Telegram Bot Commands** | ~3h | Manage the service via Telegram messages instead of curl/API. Commands: `/position BTCUSDT` (set active position → enables anomaly monitoring), `/close` (clear position → disables anomaly monitoring), `/status` (show position, no-trade mode, muted symbols), `/mute BTCUSDT` / `/unmute BTCUSDT`, `/notrade on` / `/notrade off`. Requires a Telegram webhook or polling listener (`TelegramCommandService`) that parses incoming messages and calls `AppSettingsService`. Admin-only — restrict to known chat IDs. |
 | **Momentum Fading Detector** | ~2h | Notify "FAST TF DIVERGENCE — consider taking profit" when 3/3 aligned but fast TFs (1m–15m) flip opposite. No new API calls. Uses existing RSI values. Exit timing signal — replaces manual chart check. |
-| **Deploy to Railway** | ~1h | For 24/7 uptime — especially important once candle history is persisted (no more warmup on laptop wake/restart). |
+| **✅ Deploy to AWS** | **COMPLETE** | Live on `108.128.230.238` (eu-west-1). 5 instruments active. See `docs/remote-deployment.md`. |
 | **Enable Claude AI enrichment** | ~30min | Add `CLAUDE_API_KEY` env var — service already built. ~$5/month at current signal frequency. |
 
 ### 🟡 P2 — High Value, Medium Effort (2–4 weeks)
@@ -181,7 +181,7 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 1. ✅ App is running — `make logs` to watch live
 2. **Paper trade** — log every signal manually for 4–8 weeks before trusting Phase 4
-3. **Deploy to Railway** — for 24/7 uptime (P1 above)
+3. **Deploy to AWS** — for 24/7 uptime. See `docs/deployment-aws.md`.
 4. **Add `CLAUDE_API_KEY`** — quick win for richer Telegram messages
 
 ---
@@ -194,7 +194,7 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 ## Notes
 
-**On renaming from "RSI Alert Service":** The tool now incorporates stochastic confirmation, Polymarket geopolitical odds, volume anomaly detection, and Claude AI enrichment — RSI is one of many signals, not the only one. Consider renaming to `market-alert-service` or `signal-alert-service` when deploying to Railway. No urgency — it's a private repo and the name doesn't affect functionality.
+**On renaming from "RSI Alert Service":** The tool now incorporates stochastic confirmation, Polymarket geopolitical odds, volume anomaly detection, and Claude AI enrichment — RSI is one of many signals, not the only one. Consider renaming to `market-alert-service` or `signal-alert-service` when deploying. No urgency — it's a private repo and the name doesn't affect functionality.
 
 **On Claude vs. alternative AI models:** Claude Haiku (~$5/month at current frequency) is the current choice. Alternatives worth evaluating:
 - **Gemini Flash (Google)** — cheaper than Haiku, comparable quality for structured tasks, free tier available

@@ -20,6 +20,12 @@ A production-grade Spring Boot service that monitors financial instruments for m
 - ✅ REST API for instruments, signals, settings, positions, retrospective analysis
 - ✅ Auto-trading scaffolded (Phase 4 — hard-disabled, requires demo validation)
 
+## Deployment
+
+- **AWS Free Tier** (primary): EC2 t2.micro in Dublin (`eu-west-1`), 12 months free, ~€15/month after
+- **CI/CD**: GitHub Actions workflow for auto-deploy on push to `main`
+- See `docs/deployment-aws.md` for full setup (manual or Terraform)
+
 ## Tech Stack
 
 - Java 25

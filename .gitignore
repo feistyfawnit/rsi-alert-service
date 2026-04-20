@@ -35,6 +35,7 @@ build/
 ### Environment ###
 .env
 *.log
+*.pem
 
 ### Runtime data (CSV archives live on disk, not in git) ###
 signal_archive/
