@@ -1,48 +1,302 @@
 # Remote Deployment Guide
 
-*AWS, Oracle Cloud, and Alibaba Cloud options*
+*AWS (primary), Oracle Cloud, and Alibaba Cloud options*
 
 ---
 
-## AWS ✅ ACTIVE — eu-west-1 (Dublin)
+## Current Status
 
-**Status:** Live instance running — `108.128.230.238`
+| Provider | Status | Cost |
+|----------|--------|------|
+| **AWS eu-west-1** | ✅ **ACTIVE** — `108.128.230.238`, 5 instruments enabled | Free (12 months), then ~€15/mo |
+| AWS us-west-2 | ❌ Terminated | — |
+| Oracle | ⏸️ Not needed — AWS working | €0 (if wanted later) |
+| Alibaba | ⏸️ Not needed — AWS working | ~€4/mo post-free-tier |
 
-**Quick launch (for reference/future):**
-- Console → EC2 → Launch Instance → Ubuntu 24.04 → t3.micro (free tier)
-- **Region: eu-west-1 (Ireland)** — ~5ms latency from Dublin
-- Security Group: Port 22 (SSH) + Port 8080 (app) from **My IP only**
-- Elastic IP: Allocate and associate for static IP
-- Storage: 30GB gp3
-- SSH key: `market-signals.pem` in `~/.ssh/` (chmod 600)
+---
 
-**Post-launch setup:**
+## AWS — eu-west-1 (Dublin) ✅ PRIMARY
+
+*EC2 t3.micro, 12 months free, Dublin region (~5ms from Ireland), CV value for Irish market.*
+
+### Prerequisites
+
+- AWS account (free tier eligible)
+- SSH key: `~/.ssh/market-signals.pem` (chmod 600)
+- Telegram bot token; (optional) IG API credentials
+
+### Step 1 — Create EC2 Instance
+
+1. Console → **EC2** → **Instances** → **Launch Instances**
+
+| Setting | Value |
+|---------|-------|
+| Name | `market-signals` |
+| AMI | Ubuntu Server 24.04 LTS (HVM), SSD — Free tier eligible |
+| Instance Type | **t3.micro** — Free tier eligible |
+| Key Pair | Create new or select existing |
+| Network Settings | Create security group (see Step 2) |
+| Storage | **30 GB gp3** (change from default 8GB) |
+| Advanced → User Data | (Optional) bootstrap script below |
+
+**⚠️ SSH Security:** Console defaults SSH to `0.0.0.0/0` — change **Allow SSH traffic from** to **My IP** before launching.
+
+**Bootstrap script** (optional — runs on first boot):
 ```bash
-# 1. SSH and create directory
+#!/bin/bash
+apt update
+apt install -y docker.io docker-compose
+usermod -aG docker ubuntu
+systemctl enable docker
+```
+
+2. **Launch Instance** → wait for "2/2 checks passed" (1–2 min)
+
+### Step 2 — Security Group
+
+1. **EC2 → Instances → market-signals → Security → Security groups → Edit inbound rules**
+
+| Rule | Port | Source |
+|------|------|--------|
+| SSH | 22 | My IP |
+| Custom TCP | 8080 | My IP |
+
+> 🔒 Keep 8080 restricted to your IP unless you need external access (e.g. webhooks).
+
+### Step 3 — Elastic IP (Static IP)
+
+1. **EC2 → Network & Security → Elastic IPs → Allocate Elastic IP address**
+2. Select the IP → **Actions → Associate Elastic IP address** → select your instance
+
+Elastic IPs are free **only when attached to a running instance** — detach before stopping to avoid charges (~€0.005/hr).
+
+### Step 4 — SSH & Docker Setup
+
+```bash
 ssh -i ~/.ssh/market-signals.pem ubuntu@YOUR_ELASTIC_IP
+
+# If Docker not installed via bootstrap:
+sudo apt update && sudo apt install -y docker.io docker-compose
+sudo usermod -aG docker $USER && sudo systemctl enable docker && newgrp docker
+```
+
+### Step 5 — Deploy Application
+
+```bash
+# On EC2 — create directory
 mkdir -p ~/apps/market-signals && cd ~/apps/market-signals
 
-# 2. From Mac — copy files (code + .env + backup)
+# From Mac — copy files (code + .env + DB backup)
 scp -i ~/.ssh/market-signals.pem -r docker-compose.yml Dockerfile pom.xml src .env backup-*.sql \
   ubuntu@YOUR_ELASTIC_IP:/home/ubuntu/apps/market-signals/
 
-# 3. On EC2 — restore DB and start
-ssh -i ~/.ssh/market-signals.pem ubuntu@YOUR_ELASTIC_IP
-cd ~/apps/market-signals
+# On EC2 — restore DB and start
 docker-compose up -d postgres
 sleep 5
 docker exec -i market-signals-postgres psql -U postgres -c "CREATE DATABASE market_signals;"
 docker exec -i market-signals-postgres psql -U postgres market_signals < backup-*.sql
 docker-compose down && docker-compose up -d --build
 
-# 4. Enable IG instruments (IDs may vary — check /api/instruments first)
+# Enable IG instruments (IDs may vary — check /api/instruments first)
 curl -X PATCH http://YOUR_ELASTIC_IP:8080/api/instruments/5/toggle  # DAX
 curl -X PATCH http://YOUR_ELASTIC_IP:8080/api/instruments/6/toggle  # FTSE
 curl -X PATCH http://YOUR_ELASTIC_IP:8080/api/instruments/7/toggle  # S&P 500
 curl -X PATCH http://YOUR_ELASTIC_IP:8080/api/instruments/8/toggle  # Gold
 ```
 
-**Cost:** Free 12 months, then ~€15/month.
+**Required `.env` additions for remote deployment:**
+```bash
+SERVER_ADDRESS=0.0.0.0
+```
+
+**Verify:**
+```bash
+curl http://YOUR_ELASTIC_IP:8080/actuator/health
+curl http://YOUR_ELASTIC_IP:8080/api/instruments/enabled
+```
+
+### Step 6 — Handle 1GB RAM (Swap)
+
+t3.micro has 1GB RAM — Java + PostgreSQL will OOM without swap.
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+free -h
+```
+
+**Optional:** limit JVM heap in `docker-compose.yml`:
+```yaml
+environment:
+  JAVA_OPTS: "-Xmx512m -Xms256m"
+```
+
+### Step 7 — Maintenance
+
+```bash
+# View logs
+docker-compose logs -f app
+
+# Update application
+git pull && docker-compose down && docker-compose up -d --build
+
+# Check resource usage
+free -h && df -h && docker stats
+
+# Backup DB locally
+docker exec market-signals-postgres pg_dump -U postgres market_signals > backup-$(date +%F).sql
+scp backup-*.sql your-mac:~/Downloads/
+```
+
+### Step 8 — Terraform (Optional)
+
+**`main.tf`:**
+```hcl
+terraform {
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+  }
+}
+
+provider "aws" {
+  region = "eu-west-1"
+}
+
+resource "aws_security_group" "market_signals" {
+  name_prefix = "market-signals"
+
+  ingress { from_port = 22;   to_port = 22;   protocol = "tcp"; cidr_blocks = ["YOUR.IP/32"] }
+  ingress { from_port = 8080; to_port = 8080; protocol = "tcp"; cidr_blocks = ["YOUR.IP/32"] }
+  egress  { from_port = 0;    to_port = 0;    protocol = "-1";  cidr_blocks = ["0.0.0.0/0"] }
+}
+
+resource "aws_instance" "market_signals" {
+  ami                    = "ami-0c1c30571d2dae5c9"  # Ubuntu 22.04 eu-west-1
+  instance_type          = "t3.micro"
+  key_name               = "your-key-pair-name"
+  vpc_security_group_ids = [aws_security_group.market_signals.id]
+
+  root_block_device { volume_size = 30 }
+
+  user_data = <<-EOF
+              #!/bin/bash
+              apt update
+              apt install -y docker.io docker-compose
+              usermod -aG docker ubuntu
+              systemctl enable docker
+              EOF
+
+  tags = { Name = "market-signals" }
+}
+
+resource "aws_eip" "market_signals" {
+  instance = aws_instance.market_signals.id
+  domain   = "vpc"
+}
+
+output "public_ip" {
+  value = aws_eip.market_signals.public_ip
+}
+```
+
+```bash
+terraform init && terraform plan && terraform apply
+ssh -i ~/.ssh/market-signals.pem ubuntu@$(terraform output -raw public_ip)
+```
+
+### Step 9 — CloudWatch Logs (Optional)
+
+```bash
+wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+sudo dpkg -i amazon-cloudwatch-agent.deb
+
+sudo tee /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [{
+          "file_path": "/home/ubuntu/apps/market-signals/logs/*.log",
+          "log_group_name": "market-signals",
+          "log_stream_name": "{instance_id}"
+        }]
+      }
+    }
+  }
+}
+EOF
+
+sudo systemctl enable amazon-cloudwatch-agent && sudo systemctl start amazon-cloudwatch-agent
+```
+
+View in Console → **CloudWatch → Log groups → market-signals**.
+
+### Step 10 — Free SSL with Let's Encrypt (Optional)
+
+```bash
+sudo apt install -y nginx certbot python3-certbot-nginx
+
+sudo tee /etc/nginx/sites-available/market-signals << 'EOF'
+server {
+    listen 80;
+    server_name signals.yourdomain.com;
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+EOF
+
+sudo ln -s /etc/nginx/sites-available/market-signals /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl restart nginx
+sudo certbot --nginx -d signals.yourdomain.com
+```
+
+Then update Security Group: remove 8080, add 443.
+
+### Security Checklist
+
+- [ ] **Port 22 and 8080 restricted to your IP (not 0.0.0.0/0)**
+- [ ] Elastic IP attached (stable endpoint)
+- [ ] Swap file configured (prevents OOM)
+- [ ] `.env` permissions: `chmod 600 .env`
+- [ ] `.env` in `.gitignore` — no secrets committed
+- [ ] IG demo account only (if enabled)
+- [ ] `TRADING_AUTO_EXECUTION_ENABLED=false`
+
+### Troubleshooting
+
+**Can't reach port 8080:**
+```bash
+# Check security group allows your IP
+# Check .env has SERVER_ADDRESS=0.0.0.0
+docker exec market-signals-service netstat -tlnp
+```
+
+**Out of memory:**
+```bash
+free -h && swapon -s
+dmesg | grep -i "killed process"
+```
+
+**Docker permission denied:**
+```bash
+exit && ssh ...  # Re-login to pick up docker group
+# Or: newgrp docker
+```
+
+**SSH Permission denied (publickey):**
+```bash
+mv ~/Downloads/market-signals.pem ~/.ssh/
+chmod 600 ~/.ssh/market-signals.pem
+ssh -i ~/.ssh/market-signals.pem ubuntu@YOUR_ELASTIC_IP
+```
 
 ---
 
@@ -74,11 +328,8 @@ curl -X PATCH http://YOUR_ELASTIC_IP:8080/api/instruments/8/toggle  # Gold
 chmod 600 ~/Downloads/ssh-key-*.key
 ssh -i ~/Downloads/ssh-key-*.key ubuntu@ORACLE_IP
 
-# Install Docker
 sudo apt update && sudo apt install -y docker.io docker-compose
 sudo usermod -aG docker $USER && newgrp docker
-
-# Create directory
 mkdir -p ~/apps/market-signals && cd ~/apps/market-signals
 ```
 
@@ -98,19 +349,15 @@ docker-compose up -d --build
 ### 6. DB Migration (if moving from MacBook)
 ```bash
 # On MacBook first
-make up
-sleep 10
+make up && sleep 10
 docker exec market-signals-postgres pg_dump -U postgres market_signals > backup.sql
 make down
 
-# Copy to Oracle
+# Copy to Oracle and restore
 scp -i ~/Downloads/ssh-key-*.key backup.sql ubuntu@ORACLE_IP:/home/ubuntu/apps/market-signals/
-
-# On Oracle VM — restore
 ssh -i ~/Downloads/ssh-key-*.key ubuntu@ORACLE_IP
 cd ~/apps/market-signals
-docker-compose up -d postgres
-sleep 5
+docker-compose up -d postgres && sleep 5
 docker exec -i market-signals-postgres psql -U postgres -c "CREATE DATABASE market_signals;"
 docker exec -i market-signals-postgres psql -U postgres market_signals < backup.sql
 docker-compose down && docker-compose up -d --build
@@ -126,15 +373,13 @@ docker-compose down && docker-compose up -d --build
 
 ### 1. Sign Up
 - https://www.alibabacloud.com
-- Email + phone verification
-- Add payment method
+- Email + phone verification + payment method
 
 ### 2. Create Instance
 - Console → Elastic Compute Service → Create Instance
 - Region: **Frankfurt (eu-central-1)**
 - Instance: **ecs.t6-c1m1.large** (free tier eligible)
-- Image: Ubuntu 22.04
-- Storage: 40GB
+- Image: Ubuntu 22.04, Storage: 40GB
 
 ### 3. Security Group
 - Add rules: Port 22 (SSH), Port 8080 (app) from your IP
@@ -146,11 +391,43 @@ Same steps as Oracle — SSH in, install Docker, copy files, start services.
 
 ---
 
-## CI/CD Pipeline
+## CI/CD with GitHub Actions
 
-Works with any provider — update `secrets.EC2_HOST` and `secrets.EC2_SSH_KEY` in GitHub.
+Auto-deploy on every push to `main`:
 
-See `.github/workflows/deploy.yml` in repo root.
+**`.github/workflows/deploy.yml`:**
+```yaml
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main, master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/apps/market-signals
+            git pull origin main
+            docker-compose down
+            docker-compose up -d --build
+            docker-compose ps
+```
+
+**Setup:** Add secrets in Repository → Settings → Secrets → Actions:
+- `EC2_HOST` = your Elastic IP
+- `EC2_SSH_KEY` = contents of `~/.ssh/market-signals.pem`
+
+Works with any provider — update secrets accordingly.
 
 ---
 
@@ -168,20 +445,7 @@ docker exec -i market-signals-postgres psql -U postgres market_signals < backup.
 
 ---
 
-## Current Status
-
-| Provider | Status | Cost |
-|----------|--------|------|
-| **AWS eu-west-1** | ✅ **ACTIVE** — Instance running, 5 instruments enabled | Free (12 months), then ~€15/mo |
-| AWS us-west-2 | ❌ Terminated | — |
-| Oracle | ⏸️ Not needed — AWS working | €0 (if wanted later) |
-| Alibaba | ⏸️ Not needed — AWS working | ~€4/mo post-free-tier |
-
----
-
 ## Historical Data & P&L Analysis
-
-**Already built in:**
 
 | Feature | Endpoint | Description |
 |---------|----------|-------------|
@@ -191,13 +455,9 @@ docker exec -i market-signals-postgres psql -U postgres market_signals < backup.
 | **Candle History** | `candle_history` table | 2,885+ candles persisted, RSI calculated from full history |
 | **Backtest Analysis** | See `docs/backtest-report.md` | Manual analysis of signal quality (TP/SL hit rates) |
 
-**Generate report now:**
 ```bash
 curl http://108.128.230.238:8080/api/positions/pnl-summary
-```
 
-**View on disk:**
-```bash
 ssh -i ~/.ssh/market-signals.pem ubuntu@108.128.230.238
 cat ~/apps/market-signals/reports/pnl-report.md
 ```

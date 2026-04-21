@@ -24,7 +24,7 @@ A production-grade Spring Boot service that monitors financial instruments for m
 
 - **AWS Free Tier** (primary): EC2 t2.micro in Dublin (`eu-west-1`), 12 months free, ~€15/month after
 - **CI/CD**: GitHub Actions workflow for auto-deploy on push to `main`
-- See `docs/deployment-aws.md` for full setup (manual or Terraform)
+- See `docs/remote-deployment.md` for full setup (manual or Terraform)
 
 ## Tech Stack
 

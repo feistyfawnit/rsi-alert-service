@@ -153,7 +153,9 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 | Item | Effort | Notes |
 |------|--------|-------|
+| **✅ Duplicate position guard** | **COMPLETE** | `PositionOutcomeService.handleSignalEvent()` skips creating a new `PositionOutcome` if an open position already exists for the same symbol. Prevents report overcounting. Mirrors real-world single-position-per-instrument constraint. |
 | **✅ Candle History Persistence (DB)** | **COMPLETE** | `CandleHistory` entity persists to PostgreSQL, 2,885+ candles loaded on startup, RSI accuracy maintained across restarts. |
+| **✅ P&L Report — EUR totals + CSV endpoint** | **COMPLETE** | `PositionReportService` now shows Risk/trade, Gross wins, Gross losses, Net P&L in EUR. By Instrument breakdown added. New endpoint: `GET /api/positions/pnl-report/csv`. Makefile: `make remote-report` / `make remote-csv`. |
 | **RSI-bucket outcome analysis** (data task) | ~1h SQL | Run once ≥2 weeks of `position_outcomes` data exists (seeded Apr 18). Join `signal_logs` + `position_outcomes` to split TREND_BUY_DIP wins/losses by rsi15m bucket (<35, 35–45, 45–50, 50–55, 55–60). If <50 fires show materially higher win rate, lower `TREND_DIP_RSI_THRESHOLD` from 60 → 50 (config-only). BTC re-enabled Apr 21 to accelerate data collection. Query: `SELECT CASE WHEN s.rsi15m < 35 THEN '<35' WHEN s.rsi15m < 45 THEN '35-45' WHEN s.rsi15m < 50 THEN '45-50' WHEN s.rsi15m < 55 THEN '50-55' ELSE '55-60' END as bucket, COUNT(*) as n, SUM(CASE WHEN p.outcome = 'TP_HIT' THEN 1 ELSE 0 END) as tp, SUM(CASE WHEN p.outcome = 'SL_HIT' THEN 1 ELSE 0 END) as sl FROM signal_logs s JOIN position_outcomes p ON p.signal_log_id = s.id WHERE s.signal_type = 'TREND_BUY_DIP' GROUP BY 1 ORDER BY 1;` |
 | **Telegram Bot Commands** | ~3h | Manage the service via Telegram messages instead of curl/API. Commands: `/position BTCUSDT` (set active position → enables anomaly monitoring), `/close` (clear position → disables anomaly monitoring), `/status` (show position, no-trade mode, muted symbols), `/mute BTCUSDT` / `/unmute BTCUSDT`, `/notrade on` / `/notrade off`. Requires a Telegram webhook or polling listener (`TelegramCommandService`) that parses incoming messages and calls `AppSettingsService`. Admin-only — restrict to known chat IDs. |
 | **Momentum Fading Detector** | ~2h | Notify "FAST TF DIVERGENCE — consider taking profit" when 3/3 aligned but fast TFs (1m–15m) flip opposite. No new API calls. Uses existing RSI values. Exit timing signal — replaces manual chart check. |
@@ -182,7 +184,7 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 1. ✅ App is running — `make logs` (local) · `make remote-logs` (AWS EC2) · `make ship` (deploy + watch)
 2. **Paper trade** — log every signal manually for 4–8 weeks before trusting Phase 4
-3. **Deploy to AWS** — for 24/7 uptime. See `docs/deployment-aws.md`.
+3. **Deploy to AWS** — for 24/7 uptime. See `docs/remote-deployment.md`.
 4. **Add `CLAUDE_API_KEY`** — quick win for richer Telegram messages
 
 ---
@@ -204,4 +206,4 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 - **Windsurf/Copilot** — IDE-only tools, not suitable for server-side enrichment
 - The `ClaudeEnrichmentService` is the only class to change — all others call it via interface. Swapping models is low-effort once a provider is chosen.
 
-*Ivan T & Brian H — Private Use — Not for Distribution*
+*Private Use — Not for Distribution*

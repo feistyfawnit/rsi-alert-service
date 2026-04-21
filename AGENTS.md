@@ -49,9 +49,7 @@ If you are reviewing or changing this repo, read in this order:
 ## Deployment
 
 Primary path: **AWS Free Tier** — Dublin region (`eu-west-1`), 12 months free, ~€15/month after.
-See `docs/deployment-aws.md` for full guide (Terraform optional).
-
-Alternatives in `docs/archived/`: Alibaba Cloud (simpler, cheaper post-free-tier), Oracle Cloud (free forever but complex).
+See `docs/remote-deployment.md` for full guide (Terraform, Oracle, Alibaba, CI/CD all included).
 
 ## Useful Commands
 
