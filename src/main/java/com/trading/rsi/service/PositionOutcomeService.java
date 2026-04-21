@@ -60,6 +60,12 @@ public class PositionOutcomeService {
         RsiSignal signal = event.getSignal();
         if (!TRACKED_SIGNALS.contains(signal.getSignalType())) return;
 
+        if (positionOutcomeRepository.existsBySymbolAndExitTimeIsNull(signal.getSymbol())) {
+            log.debug("Skipping position for {} {} — open position already exists",
+                    signal.getSymbol(), signal.getSignalType());
+            return;
+        }
+
         boolean isLong = signal.getSignalType() == SignalLog.SignalType.OVERSOLD
                 || signal.getSignalType() == SignalLog.SignalType.TREND_BUY_DIP;
         boolean isTrend = signal.getSignalType() == SignalLog.SignalType.TREND_BUY_DIP

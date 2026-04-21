@@ -15,4 +15,6 @@ public interface PositionOutcomeRepository extends JpaRepository<PositionOutcome
     List<PositionOutcome> findByExitTimeIsNotNull();
 
     List<PositionOutcome> findBySignalTypeAndExitTimeIsNotNull(SignalLog.SignalType signalType);
+
+    boolean existsBySymbolAndExitTimeIsNull(String symbol);
 }
