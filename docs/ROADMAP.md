@@ -7,7 +7,7 @@
 ## ✅ Phase 1 — Core Multi-Indicator Alert Engine — COMPLETE
 
 - Spring Boot app running in Docker
-- Binance API for crypto (SOL, BTC, ETH, BCH) — live
+- Binance API for crypto: SOL (live), BTC (re-enabled Apr 21 — history collection, TREND_BUY_DIP suppressed), ETH/BCH (disabled)
 - RSI calculation across 15m / 1h / 4h timeframes
 - Push notifications on signal — live (originally ntfy.sh, migrated to Telegram April 2026)
 - PostgreSQL watchlist with CRUD REST API
@@ -154,6 +154,7 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 | Item | Effort | Notes |
 |------|--------|-------|
 | **✅ Candle History Persistence (DB)** | **COMPLETE** | `CandleHistory` entity persists to PostgreSQL, 2,885+ candles loaded on startup, RSI accuracy maintained across restarts. |
+| **RSI-bucket outcome analysis** (data task) | ~1h SQL | Run once ≥2 weeks of `position_outcomes` data exists (seeded Apr 18). Join `signal_logs` + `position_outcomes` to split TREND_BUY_DIP wins/losses by rsi15m bucket (<35, 35–45, 45–50, 50–55, 55–60). If <50 fires show materially higher win rate, lower `TREND_DIP_RSI_THRESHOLD` from 60 → 50 (config-only). BTC re-enabled Apr 21 to accelerate data collection. Query: `SELECT CASE WHEN s.rsi15m < 35 THEN '<35' WHEN s.rsi15m < 45 THEN '35-45' WHEN s.rsi15m < 50 THEN '45-50' WHEN s.rsi15m < 55 THEN '50-55' ELSE '55-60' END as bucket, COUNT(*) as n, SUM(CASE WHEN p.outcome = 'TP_HIT' THEN 1 ELSE 0 END) as tp, SUM(CASE WHEN p.outcome = 'SL_HIT' THEN 1 ELSE 0 END) as sl FROM signal_logs s JOIN position_outcomes p ON p.signal_log_id = s.id WHERE s.signal_type = 'TREND_BUY_DIP' GROUP BY 1 ORDER BY 1;` |
 | **Telegram Bot Commands** | ~3h | Manage the service via Telegram messages instead of curl/API. Commands: `/position BTCUSDT` (set active position → enables anomaly monitoring), `/close` (clear position → disables anomaly monitoring), `/status` (show position, no-trade mode, muted symbols), `/mute BTCUSDT` / `/unmute BTCUSDT`, `/notrade on` / `/notrade off`. Requires a Telegram webhook or polling listener (`TelegramCommandService`) that parses incoming messages and calls `AppSettingsService`. Admin-only — restrict to known chat IDs. |
 | **Momentum Fading Detector** | ~2h | Notify "FAST TF DIVERGENCE — consider taking profit" when 3/3 aligned but fast TFs (1m–15m) flip opposite. No new API calls. Uses existing RSI values. Exit timing signal — replaces manual chart check. |
 | **✅ Deploy to AWS** | **COMPLETE** | Live on `108.128.230.238` (eu-west-1). 5 instruments active. See `docs/remote-deployment.md`. |
@@ -179,7 +180,7 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 ## Immediate Next Actions
 
-1. ✅ App is running — `make logs` to watch live
+1. ✅ App is running — `make logs` (local) · `make remote-logs` (AWS EC2) · `make ship` (deploy + watch)
 2. **Paper trade** — log every signal manually for 4–8 weeks before trusting Phase 4
 3. **Deploy to AWS** — for 24/7 uptime. See `docs/deployment-aws.md`.
 4. **Add `CLAUDE_API_KEY`** — quick win for richer Telegram messages
@@ -194,7 +195,7 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 ## Notes
 
-**On renaming from "RSI Alert Service":** The tool now incorporates stochastic confirmation, Polymarket geopolitical odds, volume anomaly detection, and Claude AI enrichment — RSI is one of many signals, not the only one. Consider renaming to `market-alert-service` or `signal-alert-service` when deploying. No urgency — it's a private repo and the name doesn't affect functionality.
+**On renaming from "RSI Alert Service":** ✅ Done — repo renamed to `market-signals` (April 2026). Local directory `/rsi-alert-service` retained as-is (private, no impact).
 
 **On Claude vs. alternative AI models:** Claude Haiku (~$5/month at current frequency) is the current choice. Alternatives worth evaluating:
 - **Gemini Flash (Google)** — cheaper than Haiku, comparable quality for structured tasks, free tier available

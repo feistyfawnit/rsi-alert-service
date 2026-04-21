@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="rsi-alert-service"/>
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="market-signals"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>

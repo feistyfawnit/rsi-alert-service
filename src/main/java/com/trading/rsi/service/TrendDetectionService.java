@@ -264,6 +264,10 @@ public class TrendDetectionService {
      */
     public void checkForTrendEntry(Instrument instrument, Map<String, BigDecimal> rsiValues,
                                     BigDecimal currentPrice, Candle triggerCandle) {
+        if (Boolean.FALSE.equals(instrument.getTrendBuyDipEnabled())) {
+            log.debug("Trend entry skipped for {} — trend-buy-dip-enabled=false", instrument.getSymbol());
+            return;
+        }
         TrendState trend = getTrendState(instrument.getSymbol());
         if (trend == TrendState.NEUTRAL) return;
 

@@ -24,5 +24,6 @@ public class WatchlistProperties {
         private Integer oversoldThreshold = 30;
         private Integer overboughtThreshold = 70;
         private String timeframes = "1m,5m,1h,4h";
+        private Boolean trendBuyDipEnabled = true;
     }
 }

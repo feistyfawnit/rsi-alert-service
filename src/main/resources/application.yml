@@ -175,11 +175,12 @@ watchlist:
     - symbol: BTCUSDT
       name: Bitcoin
       source: BINANCE
-      enabled: false
+      enabled: true
       type: CRYPTO
       oversold-threshold: 30
       overbought-threshold: 70
       timeframes: "15m,1h,4h"
+      trend-buy-dip-enabled: false  # +0.18R at high RSI — collecting history; revisit when RSI-bucket analysis available
     - symbol: ETHUSDT
       name: Ethereum
       source: BINANCE
@@ -214,6 +215,7 @@ watchlist:
       oversold-threshold: 30
       overbought-threshold: 70
       timeframes: "15m,30m,1h"
+      trend-buy-dip-enabled: false  # −0.86R backtest (7 signals, 0% TP, 86% SL)
     - symbol: IX.D.SPTRD.DAILY.IP
       name: S&P 500
       source: IG
@@ -231,6 +233,7 @@ watchlist:
       oversold-threshold: 30
       overbought-threshold: 70
       timeframes: "15m,1h,4h"
+      trend-buy-dip-enabled: false  # −1.00R backtest (6 signals, 0% TP, 100% SL)
     # Oil: FSD (forward) epic expired — switched to USS (cash/rolling) contract
     - symbol: CC.D.LCO.USS.IP
       name: Oil (Brent)
@@ -256,3 +259,4 @@ watchlist:
       oversold-threshold: 30
       overbought-threshold: 70
       timeframes: "15m,1h,4h"
+      trend-buy-dip-enabled: false  # −1.00R backtest (3 signals, 0% TP, 100% SL)

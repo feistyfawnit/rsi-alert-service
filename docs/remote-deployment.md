@@ -20,15 +20,15 @@
 ```bash
 # 1. SSH and create directory
 ssh -i ~/.ssh/market-signals.pem ubuntu@YOUR_ELASTIC_IP
-mkdir -p ~/apps/rsi-alert-service && cd ~/apps/rsi-alert-service
+mkdir -p ~/apps/market-signals && cd ~/apps/market-signals
 
 # 2. From Mac — copy files (code + .env + backup)
 scp -i ~/.ssh/market-signals.pem -r docker-compose.yml Dockerfile pom.xml src .env backup-*.sql \
-  ubuntu@YOUR_ELASTIC_IP:/home/ubuntu/apps/rsi-alert-service/
+  ubuntu@YOUR_ELASTIC_IP:/home/ubuntu/apps/market-signals/
 
 # 3. On EC2 — restore DB and start
 ssh -i ~/.ssh/market-signals.pem ubuntu@YOUR_ELASTIC_IP
-cd ~/apps/rsi-alert-service
+cd ~/apps/market-signals
 docker-compose up -d postgres
 sleep 5
 docker exec -i market-signals-postgres psql -U postgres -c "CREATE DATABASE market_signals;"
@@ -79,7 +79,7 @@ sudo apt update && sudo apt install -y docker.io docker-compose
 sudo usermod -aG docker $USER && newgrp docker
 
 # Create directory
-mkdir -p ~/apps/rsi-alert-service && cd ~/apps/rsi-alert-service
+mkdir -p ~/apps/market-signals && cd ~/apps/market-signals
 ```
 
 ### 5. Deploy
@@ -87,11 +87,11 @@ mkdir -p ~/apps/rsi-alert-service && cd ~/apps/rsi-alert-service
 # From Mac — copy files
 scp -i ~/Downloads/ssh-key-*.key \
   docker-compose.yml Dockerfile pom.xml src .env \
-  ubuntu@ORACLE_IP:/home/ubuntu/apps/rsi-alert-service/
+  ubuntu@ORACLE_IP:/home/ubuntu/apps/market-signals/
 
 # On Oracle VM — start
 ssh -i ~/Downloads/ssh-key-*.key ubuntu@ORACLE_IP
-cd ~/apps/rsi-alert-service
+cd ~/apps/market-signals
 docker-compose up -d --build
 ```
 
@@ -104,11 +104,11 @@ docker exec market-signals-postgres pg_dump -U postgres market_signals > backup.
 make down
 
 # Copy to Oracle
-scp -i ~/Downloads/ssh-key-*.key backup.sql ubuntu@ORACLE_IP:/home/ubuntu/apps/rsi-alert-service/
+scp -i ~/Downloads/ssh-key-*.key backup.sql ubuntu@ORACLE_IP:/home/ubuntu/apps/market-signals/
 
 # On Oracle VM — restore
 ssh -i ~/Downloads/ssh-key-*.key ubuntu@ORACLE_IP
-cd ~/apps/rsi-alert-service
+cd ~/apps/market-signals
 docker-compose up -d postgres
 sleep 5
 docker exec -i market-signals-postgres psql -U postgres -c "CREATE DATABASE market_signals;"
@@ -199,7 +199,7 @@ curl http://108.128.230.238:8080/api/positions/pnl-summary
 **View on disk:**
 ```bash
 ssh -i ~/.ssh/market-signals.pem ubuntu@108.128.230.238
-cat ~/apps/rsi-alert-service/reports/pnl-report.md
+cat ~/apps/market-signals/reports/pnl-report.md
 ```
 
 ---

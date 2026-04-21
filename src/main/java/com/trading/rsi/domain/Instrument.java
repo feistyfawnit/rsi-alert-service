@@ -49,7 +49,11 @@ public class Instrument {
     @Builder.Default
     @Column(name = "timeframes")
     private String timeframes = "1m,5m,1h,4h";
-    
+
+    @Builder.Default
+    @Column(name = "trend_buy_dip_enabled")
+    private Boolean trendBuyDipEnabled = true;
+
     @Column(name = "market_close_utc")
     private Integer marketCloseUtc;
     

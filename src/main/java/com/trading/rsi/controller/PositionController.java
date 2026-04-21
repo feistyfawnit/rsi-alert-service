@@ -34,4 +34,9 @@ public class PositionController {
         positionReportService.writeScheduledReport();
         return Map.of("status", "written", "message", "P&L report updated");
     }
+
+    @GetMapping(value = "/pnl-report/csv", produces = "text/csv")
+    public String getPnlCsv() {
+        return positionReportService.generateCsv();
+    }
 }

@@ -34,6 +34,12 @@ public class PositionReportService {
     @Value("${pnl.report.path:./reports/pnl-report.md}")
     private String reportPath;
 
+    @Value("${rsi.demo.account-balance:10000}")
+    private int demoAccountBalance;
+
+    @Value("${rsi.demo.risk-percent:1}")
+    private int demoRiskPercent;
+
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     /**
@@ -78,6 +84,10 @@ public class PositionReportService {
             long slHits = closed.stream().filter(p -> Boolean.TRUE.equals(p.getSlHit())).count();
             double avgPnl = closed.stream().mapToDouble(p -> p.getPnlPct().doubleValue()).average().orElse(0);
             double winRate = (double) wins / closed.size() * 100;
+            double riskEur = demoAccountBalance * demoRiskPercent / 100.0;
+            double eurWins = wins * riskEur * 2;          // 2:1 R:R default
+            double eurLosses = (closed.size() - wins) * riskEur;
+            double netEur = eurWins - eurLosses;
 
             md.append("| Win rate | **").append(String.format("%.0f%%", winRate))
               .append("** (").append(wins).append("/").append(closed.size()).append(") |\n");
@@ -85,8 +95,38 @@ public class PositionReportService {
             md.append("| TP hits | ").append(tpHits).append(" |\n");
             md.append("| SL hits | ").append(slHits).append(" |\n");
             md.append("| Auto-closes (24h) | ").append(closed.size() - tpHits - slHits).append(" |\n");
+            md.append("| Risk per trade | €").append(String.format("%.0f", riskEur)).append(" |\n");
+            md.append("| Gross wins (2:1) | **+€").append(String.format("%.0f", eurWins)).append("** |\n");
+            md.append("| Gross losses | **-€").append(String.format("%.0f", eurLosses)).append("** |\n");
+            md.append("| **Net P&L (est.)** | **").append(netEur >= 0 ? "+" : "").append(String.format("€%.0f", netEur)).append("** |\n");
         } else {
             md.append("\n*No closed positions yet — results appear after signals fire and 24h elapses.*\n");
+        }
+
+        // ── By Instrument ──
+        if (!closed.isEmpty()) {
+            md.append("\n## By Instrument\n\n");
+            md.append("| Instrument | N | Wins | Win% | Avg P&L | Net €(est) |\n");
+            md.append("|-----------|---|------|------|---------|-----------|\n");
+            double riskEurInst = demoAccountBalance * demoRiskPercent / 100.0;
+            closed.stream()
+                    .collect(Collectors.groupingBy(PositionOutcome::getSymbol))
+                    .entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> {
+                        List<PositionOutcome> group = entry.getValue();
+                        long w = group.stream().filter(p -> p.getPnlPct().compareTo(BigDecimal.ZERO) > 0).count();
+                        double wr = (double) w / group.size() * 100;
+                        double avg = group.stream().mapToDouble(p -> p.getPnlPct().doubleValue()).average().orElse(0);
+                        double net = (w * riskEurInst * 2) - ((group.size() - w) * riskEurInst);
+                        md.append("| ").append(entry.getKey())
+                          .append(" | ").append(group.size())
+                          .append(" | ").append(w)
+                          .append(" | ").append(String.format("%.0f%%", wr))
+                          .append(" | ").append(String.format("%+.2f%%", avg))
+                          .append(" | ").append(net >= 0 ? "+" : "").append(String.format("€%.0f", net))
+                          .append(" |\n");
+                    });
         }
 
         // ── By Signal Type ──
@@ -159,5 +199,48 @@ public class PositionReportService {
 
         md.append("\n---\n*Run `make pnl-report` to refresh. Auto-updates daily at 06:00 UTC.*\n");
         return md.toString();
+    }
+
+    /**
+     * Generate CSV of all closed positions for download.
+     */
+    public String generateCsv() {
+        List<PositionOutcome> closed = positionOutcomeRepository.findByExitTimeIsNotNull();
+        List<PositionOutcome> open   = positionOutcomeRepository.findByExitTimeIsNull();
+        List<PositionOutcome> all = new java.util.ArrayList<>();
+        all.addAll(open);
+        all.addAll(closed);
+        all.sort(Comparator.comparing(PositionOutcome::getEntryTime).reversed());
+
+        double riskEur = demoAccountBalance * demoRiskPercent / 100.0;
+        StringBuilder csv = new StringBuilder();
+        csv.append("id,direction,signal_type,symbol,entry_time,entry_price,stop_price,target_price,");
+        csv.append("result,exit_time,pnl_pct,est_eur_pnl,holding_hrs\n");
+
+        for (PositionOutcome p : all) {
+            String direction = Boolean.TRUE.equals(p.getIsLong()) ? "LONG" : "SHORT";
+            String result = p.getExitTime() == null ? "OPEN"
+                    : Boolean.TRUE.equals(p.getTpHit()) ? "WIN"
+                    : Boolean.TRUE.equals(p.getSlHit()) ? "LOSS" : "EXPIRED";
+            double estEur = 0;
+            if (p.getPnlPct() != null && p.getExitTime() != null) {
+                estEur = "WIN".equals(result) ? riskEur * 2 : -riskEur;
+            }
+            csv.append(p.getId()).append(",")
+               .append(direction).append(",")
+               .append(p.getSignalType()).append(",")
+               .append(p.getSymbol()).append(",")
+               .append(p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT)).append(",")
+               .append(p.getEntryPrice().toPlainString()).append(",")
+               .append(p.getSlPrice().toPlainString()).append(",")
+               .append(p.getTpPrice().toPlainString()).append(",")
+               .append(result).append(",")
+               .append(p.getExitTime() != null ? p.getExitTime().atZone(ZoneOffset.UTC).format(FMT) : "").append(",")
+               .append(p.getPnlPct() != null ? String.format("%+.2f", p.getPnlPct().doubleValue()) : "").append(",")
+               .append(p.getExitTime() != null ? String.format("%+.0f", estEur) : "").append(",")
+               .append(p.getHoldingHours() != null ? String.format("%.1f", p.getHoldingHours()) : "")
+               .append("\n");
+        }
+        return csv.toString();
     }
 }

@@ -166,15 +166,15 @@ docker --version || {
 mkdir -p ~/apps && cd ~/apps
 
 # Clone repo
-git clone https://github.com/yourusername/rsi-alert-service.git
-cd rsi-alert-service
+git clone https://YOUR_TOKEN@github.com/feistyfawnit/market-signals.git
+cd market-signals
 ```
 
 ### Transfer .env
 
 **From your Mac:**
 ```bash
-scp -i ~/.ssh/aws_key.pem /Users/terryi/Windsurf/rsi-alert-service/.env ubuntu@YOUR.IP:/home/ubuntu/apps/rsi-alert-service/
+scp -i ~/.ssh/market-signals.pem /Users/terryi/Windsurf/rsi-alert-service/.env ubuntu@YOUR.IP:/home/ubuntu/apps/market-signals/
 ```
 
 **Edit on server:**
@@ -292,7 +292,7 @@ sudo tee /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'E
       "files": {
         "collect_list": [
           {
-            "file_path": "/home/ubuntu/apps/rsi-alert-service/logs/*.log",
+            "file_path": "/home/ubuntu/apps/market-signals/logs/*.log",
             "log_group_name": "market-signals",
             "log_stream_name": "{instance_id}"
           }
@@ -536,7 +536,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/apps/rsi-alert-service
+            cd ~/apps/market-signals
             git pull origin main
             docker-compose down
             docker-compose up -d --build

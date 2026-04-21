@@ -2,7 +2,7 @@
 
 ## Project Purpose
 
-`rsi-alert-service` is a private Spring Boot market-monitoring service.
+`market-signals` is a private Spring Boot market-monitoring service.
 It polls Binance and IG market data, calculates RSI and Stochastic across configured timeframes, detects signals, logs them, and sends Telegram alerts.
 
 ## Start Here
@@ -17,12 +17,13 @@ If you are reviewing or changing this repo, read in this order:
 
 ## Current Runtime Shape
 
-- **Binance instruments**: `SOLUSDT`, `BTCUSDT`, `ETHUSDT`, `BCHUSDT`
+- **Binance instruments**: `SOLUSDT` (full signals), `BTCUSDT` (enabled, TREND_BUY_DIP suppressed — history collection only), `ETHUSDT`/`BCHUSDT` (disabled)
   - Timeframes: `15m,1h,4h`
-- **IG indices**: DAX, FTSE 100, S&P 500, Nasdaq 100
+- **IG indices**: DAX, S&P 500 (full signals); FTSE 100 (enabled, TREND_BUY_DIP suppressed); Nasdaq 100 (disabled)
   - Timeframes: `15m,30m,1h`
-- **IG commodities**: Gold, Silver, Oil (Brent)
+- **IG commodities**: Gold (enabled, TREND_BUY_DIP suppressed); Silver, Oil (disabled)
   - Timeframes: `15m,1h,4h`
+- **`trend-buy-dip-enabled` flag**: per-instrument in YAML, synced to DB on restart. FTSE/Gold/Silver = false (backtest −0.86R to −1.00R). YAML wins for this field (unlike `enabled` which DB preserves).
 
 ## Important Guardrails
 
@@ -55,9 +56,17 @@ Alternatives in `docs/archived/`: Alibaba Cloud (simpler, cheaper post-free-tier
 ## Useful Commands
 
 ```bash
+# Local (Mac / Colima)
 make up
 make logs
 make pnl-report
+
+# AWS EC2 (run from Mac — SSH in automatically)
+make deploy        # pull + rebuild + start on EC2
+make remote-logs   # tail logs from EC2
+make ship          # deploy then tail (one command)
+
+# Health checks (swap localhost for EC2 IP when targeting AWS)
 curl http://localhost:8080/actuator/health
 curl http://localhost:8080/api/instruments/enabled
 curl http://localhost:8080/api/signals/rsi-snapshot

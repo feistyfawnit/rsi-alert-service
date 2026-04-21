@@ -39,6 +39,7 @@ public class DataInitializer implements ApplicationRunner {
                         .oversoldThreshold(config.getOversoldThreshold())
                         .overboughtThreshold(config.getOverboughtThreshold())
                         .timeframes(config.getTimeframes())
+                        .trendBuyDipEnabled(config.getTrendBuyDipEnabled())
                         .build();
                 instrumentRepository.save(instrument);
                 log.info("Seeded instrument: {} ({})", config.getName(), config.getSymbol());
@@ -53,6 +54,8 @@ public class DataInitializer implements ApplicationRunner {
                 instrument.setOversoldThreshold(config.getOversoldThreshold());
                 instrument.setOverboughtThreshold(config.getOverboughtThreshold());
                 instrument.setTimeframes(config.getTimeframes());
+                // trendBuyDipEnabled is YAML-controlled (strategy config, not runtime state)
+                instrument.setTrendBuyDipEnabled(config.getTrendBuyDipEnabled());
                 instrumentRepository.save(instrument);
                 log.debug("Synced instrument from YAML: {} (enabled={} - preserved from DB)", config.getSymbol(), instrument.getEnabled());
                 updated++;

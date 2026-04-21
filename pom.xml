@@ -13,7 +13,7 @@
     </parent>
     
     <groupId>com.trading</groupId>
-    <artifactId>rsi-alert-service</artifactId>
+    <artifactId>market-signals</artifactId>
     <version>0.1.0</version>
     <name>LucidLynx Market Signals</name>
     <description>Multi-indicator market alert service with RSI, Stochastic, anomaly detection, and Polymarket geopolitical monitoring</description>

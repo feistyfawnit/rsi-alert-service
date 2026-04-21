@@ -2,7 +2,7 @@
 
 A production-grade Spring Boot service that monitors financial instruments for multi-indicator alignment signals across multiple timeframes and sends instant push notifications. Combines RSI, Stochastic, volume anomalies, and geopolitical event monitoring (via Polymarket). Monitors crypto (via Binance), indices and commodities (via IG API) in real time.
 
-**Repository:** `https://github.com/feistyfawnit/rsi-alert-service` (Private)
+**Repository:** `https://github.com/feistyfawnit/market-signals` (Private)
 
 ## Features
 
