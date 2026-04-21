@@ -33,6 +33,7 @@ public class SignalDetectionService {
     private final SignalCooldownService cooldownService;
     private final PartialSignalMonitorService partialSignalMonitorService;
     private final TrendDetectionService trendDetectionService;
+    private final AnomalyNotificationService anomalyNotificationService;
     
     @Value("${rsi.period:14}")
     private int rsiPeriod;
@@ -176,6 +177,12 @@ public class SignalDetectionService {
         }
         
         if (signalType != null && cooldownService.shouldAlert(instrument.getSymbol(), signalType)) {
+            if (anomalyNotificationService.recentCriticalAnomalyFor(instrument.getSymbol(), 60)) {
+                log.warn("ANOMALY-SUPPRESSED: {} {} — CRITICAL anomaly within last 60 min (retained for review)",
+                        signalType, instrument.getSymbol());
+                return;
+            }
+
             boolean isFullSignal = alignedCount >= totalTimeframes;
 
             // Suppress partial/watch signals for crypto (volatile, need full alignment for reliable signals)

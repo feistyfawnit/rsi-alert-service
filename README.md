@@ -148,7 +148,7 @@ IG Daily Funded Bets (DFB) accrue **overnight financing charges every calendar d
 
 ## Troubleshooting
 
-See [docs/troubleshooting.md](docs/troubleshooting.md) for operational troubleshooting and IG quota guidance. See [QUICKSTART.md](QUICKSTART.md) for first-run/demo steps. Quick checks:
+See [docs/troubleshooting.md](docs/troubleshooting.md) for operational troubleshooting and IG quota guidance. See [docs/quickstart.md](docs/quickstart.md) for first-run/demo steps. Quick checks:
 
 ```bash
 curl http://localhost:8080/actuator/health           # App running?
@@ -162,7 +162,7 @@ docker-compose logs -f app                             # Check logs
 | Doc | Purpose |
 |---|---|
 | [AGENTS.md](AGENTS.md) | Concise AI/developer entry point and operational guardrails |
-| [QUICKSTART.md](QUICKSTART.md) | First-run setup and demo flow |
+| [docs/quickstart.md](docs/quickstart.md) | First-run setup and demo flow |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Operational checks, common failures, IG quota notes |
 | [docs/architecture.md](docs/architecture.md) | System design, components, data flow |
 | [docs/api.md](docs/api.md) | REST API reference |

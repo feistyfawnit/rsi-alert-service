@@ -65,4 +65,22 @@ public class PositionOutcome {
 
     @Column(name = "is_long", nullable = false)
     private Boolean isLong;
+
+    @Column(name = "trend_state", length = 20)
+    private String trendState;
+
+    @Column(name = "rsi_fast", precision = 6, scale = 2)
+    private BigDecimal rsiFast;
+
+    @Column(name = "rsi_mid", precision = 6, scale = 2)
+    private BigDecimal rsiMid;
+
+    @Column(name = "rsi_slow", precision = 6, scale = 2)
+    private BigDecimal rsiSlow;
+
+    @Column(name = "stoch_k", precision = 6, scale = 2)
+    private BigDecimal stochK;
+
+    @Column(name = "stoch_d", precision = 6, scale = 2)
+    private BigDecimal stochD;
 }

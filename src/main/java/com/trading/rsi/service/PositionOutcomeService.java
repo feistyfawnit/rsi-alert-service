@@ -35,6 +35,7 @@ public class PositionOutcomeService {
     private final PositionOutcomeRepository positionOutcomeRepository;
     private final CandleHistoryRepository candleHistoryRepository;
     private final PriceHistoryService priceHistoryService;
+    private final TrendDetectionService trendDetectionService;
 
     private static final Duration MAX_HOLDING = Duration.ofHours(24);
 
@@ -91,6 +92,21 @@ public class PositionOutcomeService {
             tpPrice = entry.subtract(BigDecimal.valueOf(limitPts));
         }
 
+        String trendState = trendDetectionService.getTrendState(signal.getSymbol()).name();
+
+        List<BigDecimal> rsiList = signal.getRsiValues() == null ? List.of()
+                : signal.getRsiValues().values().stream().sorted().toList();
+        BigDecimal rsiFast = rsiList.size() >= 1 ? rsiList.get(0) : null;
+        BigDecimal rsiMid  = rsiList.size() >= 2 ? rsiList.get(1) : null;
+        BigDecimal rsiSlow = rsiList.size() >= 3 ? rsiList.get(2) : null;
+
+        BigDecimal stochK = null, stochD = null;
+        if (signal.getStochasticValues() != null && !signal.getStochasticValues().isEmpty()) {
+            var stoch = signal.getStochasticValues().values().iterator().next();
+            stochK = stoch.k().setScale(2, RoundingMode.HALF_UP);
+            stochD = stoch.d().setScale(2, RoundingMode.HALF_UP);
+        }
+
         PositionOutcome position = PositionOutcome.builder()
                 .symbol(signal.getSymbol())
                 .signalType(signal.getSignalType())
@@ -99,6 +115,12 @@ public class PositionOutcomeService {
                 .tpPrice(tpPrice)
                 .slPrice(slPrice)
                 .isLong(isLong)
+                .trendState(trendState)
+                .rsiFast(rsiFast)
+                .rsiMid(rsiMid)
+                .rsiSlow(rsiSlow)
+                .stochK(stochK)
+                .stochD(stochD)
                 .build();
 
         positionOutcomeRepository.save(position);

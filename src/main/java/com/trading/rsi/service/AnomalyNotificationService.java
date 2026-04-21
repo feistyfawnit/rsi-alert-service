@@ -1,8 +1,10 @@
 package com.trading.rsi.service;
 
+import com.trading.rsi.domain.AnomalyLog;
 import com.trading.rsi.domain.SignalLog;
 import com.trading.rsi.event.AnomalyEvent;
 import com.trading.rsi.model.AnomalyAlert;
+import com.trading.rsi.repository.AnomalyLogRepository;
 import com.trading.rsi.repository.SignalLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +13,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -25,6 +28,7 @@ public class AnomalyNotificationService {
     private final AppSettingsService appSettingsService;
     private final TelegramNotificationService telegramNotificationService;
     private final SignalLogRepository signalLogRepository;
+    private final AnomalyLogRepository anomalyLogRepository;
 
     @Value("${rsi.quiet-hours.enabled:true}")
     private boolean quietHoursEnabled;
@@ -39,11 +43,31 @@ public class AnomalyNotificationService {
     @Async
     public void handleAnomalyEvent(AnomalyEvent event) {
         AnomalyAlert alert = event.getAlert();
+
+        Object symbolObj = alert.getDetails() != null ? alert.getDetails().get("symbol") : null;
+        anomalyLogRepository.save(AnomalyLog.builder()
+                .type(alert.getType())
+                .severity(alert.getSeverity())
+                .symbol(symbolObj instanceof String s ? s : null)
+                .description(alert.getDescription())
+                .detectedAt(alert.getDetectedAt())
+                .build());
+
         if (alert.getSeverity() != AnomalyAlert.Severity.CRITICAL && isQuietHours()) {
             log.debug("Quiet hours — suppressing {} anomaly alert for {}", alert.getSeverity(), alert.getMarket());
             return;
         }
         sendUrgentAlert(alert);
+    }
+
+    /**
+     * Returns true if a CRITICAL anomaly was logged for this symbol in the last windowMinutes.
+     * Used by SignalDetectionService to suppress signals during high-uncertainty events.
+     */
+    public boolean recentCriticalAnomalyFor(String symbol, int windowMinutes) {
+        Instant since = Instant.now().minusSeconds(windowMinutes * 60L);
+        return anomalyLogRepository.existsBySymbolAndDetectedAtAfter(symbol, since)
+                || anomalyLogRepository.existsBySeverityAndDetectedAtAfter(AnomalyAlert.Severity.CRITICAL, since);
     }
 
     private Optional<SignalLog> findRecentSignal(String symbol) {

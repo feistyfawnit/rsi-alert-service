@@ -159,38 +159,127 @@ public class PositionReportService {
                     });
         }
 
+        // ── By Day ──
+        if (!closed.isEmpty()) {
+            double riskEurDay = demoAccountBalance * demoRiskPercent / 100.0;
+            md.append("\n## By Day\n\n");
+            md.append("| Date (UTC) | Signals | Closed | Wins | Losses | 24h | Net €(est) |\n");
+            md.append("|-----------|---------|--------|------|--------|-----|------------|\n");
+
+            long[] totSignals = {0}, totClosed = {0}, totWins = {0}, totLosses = {0}, totExpired = {0};
+            double[] totNet = {0};
+
+            all.stream()
+                    .collect(Collectors.groupingBy(p ->
+                            p.getEntryTime().atZone(ZoneOffset.UTC).toLocalDate().toString()))
+                    .entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> {
+                        List<PositionOutcome> day = entry.getValue();
+                        long dayClosed  = day.stream().filter(p -> p.getExitTime() != null).count();
+                        long dayWins    = day.stream().filter(p -> p.getExitTime() != null
+                                && p.getPnlPct().compareTo(BigDecimal.ZERO) > 0).count();
+                        long dayLosses  = day.stream().filter(p -> p.getExitTime() != null
+                                && Boolean.TRUE.equals(p.getSlHit())).count();
+                        long dayExpired = dayClosed - dayWins - dayLosses;
+                        double dayNet   = (dayWins * riskEurDay * 2) - (dayLosses * riskEurDay);
+                        totSignals[0] += day.size(); totClosed[0] += dayClosed;
+                        totWins[0] += dayWins; totLosses[0] += dayLosses;
+                        totExpired[0] += dayExpired; totNet[0] += dayNet;
+                        String netStr = dayClosed == 0 ? "—"
+                                : (dayNet >= 0 ? "+" : "") + String.format("€%.0f", dayNet);
+                        md.append("| ").append(entry.getKey())
+                          .append(" | ").append(day.size())
+                          .append(" | ").append(dayClosed)
+                          .append(" | ").append(dayWins)
+                          .append(" | ").append(dayLosses)
+                          .append(" | ").append(dayExpired)
+                          .append(" | ").append(netStr)
+                          .append(" |\n");
+                    });
+
+            md.append("| **Total** | **").append(totSignals[0])
+              .append("** | **").append(totClosed[0])
+              .append("** | **").append(totWins[0])
+              .append("** | **").append(totLosses[0])
+              .append("** | **").append(totExpired[0])
+              .append("** | **").append(totNet[0] >= 0 ? "+" : "").append(String.format("€%.0f", totNet[0]))
+              .append("** |\n");
+        }
+
         // ── Open Positions ──
         if (!open.isEmpty()) {
             md.append("\n## Open Positions\n\n");
-            md.append("| Symbol | Signal | Entry | TP | SL | Since |\n");
-            md.append("|--------|--------|-------|----|----|-------|\n");
+            md.append("| Symbol | Dir | Signal | Entry | TP | SL | Trend | RSI f·m·s | Stoch K/D | Since |\n");
+            md.append("|--------|-----|--------|-------|----|----|-------|-----------|-----------|-------|\n");
             open.stream()
                     .sorted(Comparator.comparing(PositionOutcome::getEntryTime))
-                    .forEach(p -> md.append("| ").append(p.getSymbol())
-                            .append(" | ").append(p.getSignalType())
-                            .append(" | ").append(p.getEntryPrice().toPlainString())
-                            .append(" | ").append(p.getTpPrice().toPlainString())
-                            .append(" | ").append(p.getSlPrice().toPlainString())
-                            .append(" | ").append(p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT))
-                            .append(" |\n"));
+                    .forEach(p -> {
+                        String dir = Boolean.TRUE.equals(p.getIsLong()) ? "▲" : "▼";
+                        String trend = p.getTrendState() != null ? switch (p.getTrendState()) {
+                            case "STRONG_UPTREND" -> "📈BULL";
+                            case "STRONG_DOWNTREND" -> "📉BEAR";
+                            default -> "—";
+                        } : "—";
+                        String rsi = (p.getRsiFast() != null)
+                                ? String.format("%.0f·%.0f·%.0f",
+                                    p.getRsiFast().doubleValue(),
+                                    p.getRsiMid() != null ? p.getRsiMid().doubleValue() : 0,
+                                    p.getRsiSlow() != null ? p.getRsiSlow().doubleValue() : 0)
+                                : "—";
+                        String stoch = (p.getStochK() != null)
+                                ? String.format("%.0f/%.0f", p.getStochK().doubleValue(),
+                                    p.getStochD() != null ? p.getStochD().doubleValue() : 0)
+                                : "—";
+                        md.append("| ").append(p.getSymbol())
+                          .append(" | ").append(dir)
+                          .append(" | ").append(p.getSignalType())
+                          .append(" | ").append(p.getEntryPrice().toPlainString())
+                          .append(" | ").append(p.getTpPrice().toPlainString())
+                          .append(" | ").append(p.getSlPrice().toPlainString())
+                          .append(" | ").append(trend)
+                          .append(" | ").append(rsi)
+                          .append(" | ").append(stoch)
+                          .append(" | ").append(p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT))
+                          .append(" |\n");
+                    });
         }
 
         // ── Recent Closed (last 20) ──
         if (!closed.isEmpty()) {
+            double riskEurExit = demoAccountBalance * demoRiskPercent / 100.0;
             md.append("\n## Recent Exits (last 20)\n\n");
-            md.append("| Symbol | Signal | Entry | Exit | P&L | Result | Held |\n");
-            md.append("|--------|--------|-------|------|-----|--------|------|\n");
+            md.append("| Symbol | Dir | Signal | Trend | RSI f·m·s | Entry | Exit | P&L% | Est € | Result | Held |\n");
+            md.append("|--------|-----|--------|-------|-----------|-------|------|------|-------|--------|------|\n");
             closed.stream()
                     .sorted(Comparator.comparing(PositionOutcome::getExitTime).reversed())
                     .limit(20)
                     .forEach(p -> {
-                        String result = Boolean.TRUE.equals(p.getTpHit()) ? "TP ✅"
-                                : Boolean.TRUE.equals(p.getSlHit()) ? "SL ❌" : "24h ➖";
+                        boolean win = Boolean.TRUE.equals(p.getTpHit());
+                        boolean loss = Boolean.TRUE.equals(p.getSlHit());
+                        String result = win ? "TP ✅" : loss ? "SL ❌" : "24h ➖";
+                        double estEur = win ? riskEurExit * 2 : -riskEurExit;
+                        String dir = Boolean.TRUE.equals(p.getIsLong()) ? "▲" : "▼";
+                        String trend = p.getTrendState() != null ? switch (p.getTrendState()) {
+                            case "STRONG_UPTREND" -> "📈";
+                            case "STRONG_DOWNTREND" -> "📉";
+                            default -> "—";
+                        } : "—";
+                        String rsi = (p.getRsiFast() != null)
+                                ? String.format("%.0f·%.0f·%.0f",
+                                    p.getRsiFast().doubleValue(),
+                                    p.getRsiMid() != null ? p.getRsiMid().doubleValue() : 0,
+                                    p.getRsiSlow() != null ? p.getRsiSlow().doubleValue() : 0)
+                                : "—";
                         md.append("| ").append(p.getSymbol())
+                          .append(" | ").append(dir)
                           .append(" | ").append(p.getSignalType())
+                          .append(" | ").append(trend)
+                          .append(" | ").append(rsi)
                           .append(" | ").append(p.getEntryPrice().toPlainString())
                           .append(" | ").append(p.getExitPrice().toPlainString())
                           .append(" | ").append(String.format("%+.2f%%", p.getPnlPct().doubleValue()))
+                          .append(" | ").append(estEur >= 0 ? "+" : "").append(String.format("€%.0f", estEur))
                           .append(" | ").append(result)
                           .append(" | ").append(p.getHoldingHours() != null ? String.format("%.1fh", p.getHoldingHours()) : "?")
                           .append(" |\n");
