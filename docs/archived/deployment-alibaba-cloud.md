@@ -128,17 +128,17 @@ docker compose version
 mkdir -p ~/apps && cd ~/apps
 
 # Clone your repo
-git clone https://github.com/yourusername/rsi-alert-service.git
-# OR: git clone git@github.com:yourusername/rsi-alert-service.git
+git clone https://github.com/yourusername/market-signals.git
+# OR: git clone git@github.com:yourusername/market-signals.git
 
-cd rsi-alert-service
+cd market-signals
 ```
 
 ### Transfer Environment File
 
 **From your Mac:**
 ```bash
-scp -i ~/.ssh/alibaba_key.pem /Users/terryi/Windsurf/rsi-alert-service/.env ubuntu@YOUR.IP:/home/ubuntu/apps/rsi-alert-service/
+scp -i ~/.ssh/alibaba_key.pem /Users/terryi/Windsurf/market-signals/.env ubuntu@YOUR.IP:/home/ubuntu/apps/market-signals/
 ```
 
 **Or create on server:**
@@ -263,7 +263,7 @@ scp ubuntu@YOUR.IP:~/backup_*.sql /Users/terryi/Downloads/
 ### Update Application
 
 ```bash
-cd ~/apps/rsi-alert-service
+cd ~/apps/market-signals
 git pull
 docker compose down
 docker compose up -d --build
@@ -333,7 +333,7 @@ If you have local data you want to preserve:
 
 ```bash
 # On your Mac — backup local database
-docker exec rsi-alert-service-postgres-1 pg_dump -U postgres market_signals > local_backup.sql
+docker exec market-signals-postgres pg_dump -U postgres market_signals > local_backup.sql
 
 # Transfer to Alibaba server
 scp local_backup.sql ubuntu@YOUR.IP:~/

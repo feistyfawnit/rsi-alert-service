@@ -130,11 +130,14 @@ See [docs/api.md](docs/api.md) for adding instruments via the REST API.
 
 ## Signal Types
 
-| Priority | Signal | Condition | ntfy priority |
+| Priority | Signal | Condition | Telegram |
 |---|---|---|---|
-| 1 | 🟢 OVERSOLD / 🔴 OVERBOUGHT | All TFs aligned | urgent (5) — bypasses DND |
-| 2 | 🟡 PARTIAL | All but 1 TF aligned | default (3) |
-| 3 | 👀 WATCH | 1 TF crossed + others approaching | low (2) |
+| 1 | 🟢 OVERSOLD / 🔴 OVERBOUGHT | All TFs aligned | Alert |
+| 2 | 📈 TREND_BUY_DIP / 📉 TREND_SELL_RALLY | RSI pullback in confirmed trend | Alert |
+| 3 | 🟡 PARTIAL | All but 1 TF aligned | Alert |
+| 4 | 👀 WATCH | 1 TF crossed + others approaching | Silent |
+
+> TREND_SELL_RALLY is currently **disabled** (`trend.sell-rally-enabled: false`) due to −0.79R expectancy in backtest.
 
 ## Trade Duration & IG Financing Costs
 

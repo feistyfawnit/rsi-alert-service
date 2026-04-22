@@ -58,7 +58,7 @@ rsi:
     account-currency: EUR
     risk-percent: 1
     stop-percent-crypto: 2.0
-    stop-percent-index: 0.5
+    stop-percent-index: 1.0
     stop-percent-commodity: 1.0
     
   trend:
@@ -184,11 +184,12 @@ watchlist:
     - symbol: ETHUSDT
       name: Ethereum
       source: BINANCE
-      enabled: false
+      enabled: true
       type: CRYPTO
       oversold-threshold: 30
       overbought-threshold: 70
       timeframes: "15m,1h,4h"
+      trend-buy-dip-enabled: false  # history collection only — revisit with RSI-bucket analysis
     - symbol: BCHUSDT
       name: Bitcoin Cash
       source: BINANCE

@@ -46,6 +46,7 @@ class PositionOutcomeServiceTest {
         ReflectionTestUtils.setField(service, "stopPercentCrypto", 2.0);
         ReflectionTestUtils.setField(service, "stopPercentIndex", 0.5);
         ReflectionTestUtils.setField(service, "stopPercentCommodity", 1.0);
+        ReflectionTestUtils.setField(service, "signalCooldownHours", 1);
     }
 
     // ── Signal creates position with correct TP/SL ──
@@ -148,6 +149,44 @@ class PositionOutcomeServiceTest {
         service.handleSignalEvent(new SignalEvent(this, signal));
 
         verify(positionOutcomeRepository, never()).save(any());
+    }
+
+    @Test
+    void handleSignalEvent_recentSignalWithinCooldown_skips() {
+        // First signal saves normally
+        RsiSignal signal1 = RsiSignal.builder()
+                .symbol("BTCUSDT")
+                .instrumentName("Bitcoin")
+                .signalType(SignalLog.SignalType.OVERSOLD)
+                .currentPrice(new BigDecimal("50000"))
+                .rsiValues(Map.of("15m", new BigDecimal("25")))
+                .timeframesAligned(3)
+                .totalTimeframes(3)
+                .build();
+
+        when(positionOutcomeRepository.save(any(PositionOutcome.class)))
+                .thenAnswer(i -> i.getArgument(0));
+        when(positionOutcomeRepository.existsBySymbolAndExitTimeIsNull("BTCUSDT")).thenReturn(false);
+        when(positionOutcomeRepository.existsBySymbolSince(eq("BTCUSDT"), any(Instant.class)))
+                .thenReturn(false)  // First call: no recent signal
+                .thenReturn(true);  // Second call: recent signal exists
+
+        service.handleSignalEvent(new SignalEvent(this, signal1));
+        verify(positionOutcomeRepository, times(1)).save(any());
+
+        // Second signal within cooldown should be skipped
+        RsiSignal signal2 = RsiSignal.builder()
+                .symbol("BTCUSDT")
+                .instrumentName("Bitcoin")
+                .signalType(SignalLog.SignalType.OVERSOLD)
+                .currentPrice(new BigDecimal("50100"))
+                .rsiValues(Map.of("15m", new BigDecimal("24")))
+                .timeframesAligned(3)
+                .totalTimeframes(3)
+                .build();
+
+        service.handleSignalEvent(new SignalEvent(this, signal2));
+        verify(positionOutcomeRepository, times(1)).save(any()); // Still only 1 save
     }
 
     // ── Exit condition checks ──

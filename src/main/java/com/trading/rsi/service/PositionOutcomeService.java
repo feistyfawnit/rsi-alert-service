@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 /**
  * Tracks position outcomes for actionable signals (OVERSOLD, OVERBOUGHT, TREND_BUY_DIP, TREND_SELL_RALLY).
  * On signal: inserts an open position with calculated TP/SL levels.
- * Hourly job: checks 1h candle highs/lows for exit conditions (TP hit, SL hit, or 24h auto-close).
+ * Exit-check job: checks finest available candle highs/lows for exit conditions (5m crypto, 15m IG).
  */
 @Service
 @Slf4j
@@ -55,15 +55,25 @@ public class PositionOutcomeService {
     @Value("${rsi.demo.stop-percent-commodity:1.0}")
     private double stopPercentCommodity;
 
+    @Value("${rsi.signal.cooldown-hours:1}")
+    private int signalCooldownHours;
+
     @EventListener
     @Async
     public void handleSignalEvent(SignalEvent event) {
         RsiSignal signal = event.getSignal();
         if (!TRACKED_SIGNALS.contains(signal.getSignalType())) return;
 
+        // Guard: skip if open position exists or signal fired within cooldown window
         if (positionOutcomeRepository.existsBySymbolAndExitTimeIsNull(signal.getSymbol())) {
             log.debug("Skipping position for {} {} — open position already exists",
                     signal.getSymbol(), signal.getSignalType());
+            return;
+        }
+        Instant cooldownSince = Instant.now().minus(Duration.ofHours(signalCooldownHours));
+        if (positionOutcomeRepository.existsBySymbolSince(signal.getSymbol(), cooldownSince)) {
+            log.debug("Skipping position for {} {} — signal within last {}h cooldown",
+                    signal.getSymbol(), signal.getSignalType(), signalCooldownHours);
             return;
         }
 
@@ -129,9 +139,9 @@ public class PositionOutcomeService {
     }
 
     /**
-     * Hourly job: check open positions for exit conditions using 1h candle highs/lows.
+     * Every 10 minutes: check open positions for exit conditions using finest available candles.
      */
-    @Scheduled(cron = "0 10 * * * *", zone = "UTC")
+    @Scheduled(cron = "0 */10 * * * *", zone = "UTC")
     public void checkExitConditions() {
         List<PositionOutcome> openPositions = positionOutcomeRepository.findByExitTimeIsNull();
         if (openPositions.isEmpty()) return;
@@ -149,9 +159,10 @@ public class PositionOutcomeService {
     }
 
     void checkAndClosePosition(PositionOutcome pos, Instant now) {
+        String timeframe = finestExitTimeframe(pos.getSymbol());
         List<CandleHistory> candles = candleHistoryRepository
                 .findBySymbolAndTimeframeAndCandleTimeBetweenOrderByCandleTimeAsc(
-                        pos.getSymbol(), "1h", pos.getEntryTime(), now);
+                        pos.getSymbol(), timeframe, pos.getEntryTime(), now);
 
         boolean tpHit = false;
         boolean slHit = false;
@@ -309,6 +320,104 @@ public class PositionOutcomeService {
         stats.put("autoCloses", autoCloses);
         stats.put("avgHoldingHours", Math.round(avgHolding * 10.0) / 10.0);
         return stats;
+    }
+
+    /**
+     * Retroactively recalculate all closed positions using the finest available candle
+     * timeframe (5m for crypto, 15m for IG). Useful after upgrading resolution logic.
+     */
+    public int recalculateClosedPositions() {
+        List<PositionOutcome> closed = positionOutcomeRepository.findByExitTimeIsNotNull();
+        int updated = 0;
+        for (PositionOutcome pos : closed) {
+            try {
+                Instant now = Instant.now();
+                String timeframe = finestExitTimeframe(pos.getSymbol());
+                List<CandleHistory> candles = candleHistoryRepository
+                        .findBySymbolAndTimeframeAndCandleTimeBetweenOrderByCandleTimeAsc(
+                                pos.getSymbol(), timeframe, pos.getEntryTime(), now);
+
+                boolean tpHit = false;
+                boolean slHit = false;
+                BigDecimal exitPrice = null;
+                Instant exitTime = null;
+
+                for (CandleHistory candle : candles) {
+                    if (Boolean.TRUE.equals(pos.getIsLong())) {
+                        if (candle.getLow().compareTo(pos.getSlPrice()) <= 0) {
+                            slHit = true; exitPrice = pos.getSlPrice(); exitTime = candle.getCandleTime();
+                            break;
+                        }
+                        if (candle.getHigh().compareTo(pos.getTpPrice()) >= 0) {
+                            tpHit = true; exitPrice = pos.getTpPrice(); exitTime = candle.getCandleTime();
+                            break;
+                        }
+                    } else {
+                        if (candle.getHigh().compareTo(pos.getSlPrice()) >= 0) {
+                            slHit = true; exitPrice = pos.getSlPrice(); exitTime = candle.getCandleTime();
+                            break;
+                        }
+                        if (candle.getLow().compareTo(pos.getTpPrice()) <= 0) {
+                            tpHit = true; exitPrice = pos.getTpPrice(); exitTime = candle.getCandleTime();
+                            break;
+                        }
+                    }
+                }
+
+                if (!tpHit && !slHit && pos.getEntryTime().plus(MAX_HOLDING).isBefore(now)) {
+                    if (!candles.isEmpty()) {
+                        CandleHistory last = candles.get(candles.size() - 1);
+                        exitPrice = last.getClose();
+                        exitTime = last.getCandleTime();
+                    }
+                }
+
+                if (exitPrice != null && exitTime != null) {
+                    boolean changed = !Objects.equals(pos.getTpHit(), tpHit)
+                            || !Objects.equals(pos.getSlHit(), slHit)
+                            || !Objects.equals(pos.getExitPrice(), exitPrice)
+                            || !Objects.equals(pos.getExitTime(), exitTime);
+                    if (changed) {
+                        pos.setTpHit(tpHit);
+                        pos.setSlHit(slHit);
+                        pos.setExitPrice(exitPrice);
+                        pos.setExitTime(exitTime);
+                        BigDecimal pnlPct;
+                        if (Boolean.TRUE.equals(pos.getIsLong())) {
+                            pnlPct = exitPrice.subtract(pos.getEntryPrice())
+                                    .divide(pos.getEntryPrice(), 4, RoundingMode.HALF_UP)
+                                    .multiply(BigDecimal.valueOf(100));
+                        } else {
+                            pnlPct = pos.getEntryPrice().subtract(exitPrice)
+                                    .divide(pos.getEntryPrice(), 4, RoundingMode.HALF_UP)
+                                    .multiply(BigDecimal.valueOf(100));
+                        }
+                        pos.setPnlPct(pnlPct);
+                        double holdingHours = Duration.between(pos.getEntryTime(), exitTime).toMinutes() / 60.0;
+                        pos.setHoldingHours(Math.round(holdingHours * 10.0) / 10.0);
+                        positionOutcomeRepository.save(pos);
+                        updated++;
+                        log.info("Recalculated position {} {}: {} -> {} (exit {})",
+                                pos.getId(), pos.getSymbol(),
+                                tpHit ? "TP" : slHit ? "SL" : "24h",
+                                pnlPct.toPlainString() + "%", exitPrice);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to recalculate position {}: {}", pos.getId(), e.getMessage());
+            }
+        }
+        log.info("Recalculated {} / {} closed positions with finer candles", updated, closed.size());
+        return updated;
+    }
+
+    private String finestExitTimeframe(String symbol) {
+        // Crypto: 5m candles available via Binance
+        if (!symbol.startsWith("IX.") && !symbol.startsWith("CS.") && !symbol.startsWith("CC.")) {
+            return "5m";
+        }
+        // IG indices/commodities: 15m candles
+        return "15m";
     }
 
     private double inferStopPercent(String symbol) {

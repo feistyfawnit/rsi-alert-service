@@ -1,4 +1,4 @@
-.PHONY: up down logs test test-anomaly ps clean pnl-report remote-report remote-csv remote-append remote-logs remote-logs-tail ship deploy
+.PHONY: up down logs test test-anomaly ps clean pnl-report remote-report remote-csv remote-append remote-logs remote-logs-tail remote-health pull-reports ship deploy
 
 EC2_IP  := 108.128.230.238
 SSH_KEY := $(HOME)/.ssh/market-signals.pem
@@ -74,3 +74,13 @@ remote-append:
 
 remote-logs-tail:
 	$(SSH) "cd $(APP_DIR) && docker-compose logs --tail $${N:-100} app"
+
+remote-health:
+	@echo "🔍 EC2 Health Check ($(EC2_IP))..."
+	@$(SSH) "echo '--- Load / Uptime ---' && uptime && echo '' && echo '--- Memory ---' && free -h && echo '' && echo '--- Disk ---' && df -h / && echo '' && echo '--- Docker ---' && docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' && echo '' && echo '--- Container Stats ---' && docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}'"
+
+pull-reports:
+	@mkdir -p reports
+	@echo "📥 Pulling reports from EC2 ($(EC2_IP)) → ./reports/ ..."
+	@scp -i $(SSH_KEY) -r ubuntu@$(EC2_IP):$(APP_DIR)/reports/* reports/ 2>/dev/null || true
+	@echo "✅ Reports synced locally."

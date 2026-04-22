@@ -197,7 +197,7 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 ## Notes
 
-**On renaming from "RSI Alert Service":** ✅ Done — repo renamed to `market-signals` (April 2026). Local directory `/rsi-alert-service` retained as-is (private, no impact).
+**On renaming from "RSI Alert Service":** ✅ Done — repo and local directory renamed to `market-signals` (April 2026).
 
 **On Claude vs. alternative AI models:** Claude Haiku (~$5/month at current frequency) is the current choice. Alternatives worth evaluating:
 - **Gemini Flash (Google)** — cheaper than Haiku, comparable quality for structured tasks, free tier available

@@ -39,4 +39,10 @@ public class PositionController {
     public String getPnlCsv() {
         return positionReportService.generateCsv();
     }
+
+    @PostMapping("/recalculate")
+    public Map<String, Object> recalculateClosedPositions() {
+        int updated = positionOutcomeService.recalculateClosedPositions();
+        return Map.of("status", "ok", "recalculated", updated);
+    }
 }

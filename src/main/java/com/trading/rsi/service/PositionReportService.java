@@ -159,6 +159,44 @@ public class PositionReportService {
                     });
         }
 
+        // ── Open Positions ──
+        if (!open.isEmpty()) {
+            md.append("\n## Open Positions\n\n");
+            md.append("| Entry Time (UTC) | Symbol | Dir | Signal | Entry | TP | SL | Trend | RSI f·m·s | Stoch K/D |\n");
+            md.append("|------------------|--------|-----|--------|-------|----|----|-------|-----------|-----------|\n");
+            open.stream()
+                    .sorted(Comparator.comparing(PositionOutcome::getEntryTime).reversed())
+                    .forEach(p -> {
+                        String dir = Boolean.TRUE.equals(p.getIsLong()) ? "▲" : "▼";
+                        String trend = p.getTrendState() != null ? switch (p.getTrendState()) {
+                            case "STRONG_UPTREND" -> "📈BULL";
+                            case "STRONG_DOWNTREND" -> "📉BEAR";
+                            default -> "—";
+                        } : "—";
+                        String rsi = (p.getRsiFast() != null)
+                                ? String.format("%.0f·%.0f·%.0f",
+                                    p.getRsiFast().doubleValue(),
+                                    p.getRsiMid() != null ? p.getRsiMid().doubleValue() : 0,
+                                    p.getRsiSlow() != null ? p.getRsiSlow().doubleValue() : 0)
+                                : "—";
+                        String stoch = (p.getStochK() != null)
+                                ? String.format("%.0f/%.0f", p.getStochK().doubleValue(),
+                                    p.getStochD() != null ? p.getStochD().doubleValue() : 0)
+                                : "—";
+                        md.append("| ").append(p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT))
+                          .append(" | ").append(p.getSymbol())
+                          .append(" | ").append(dir)
+                          .append(" | ").append(p.getSignalType())
+                          .append(" | ").append(p.getEntryPrice().toPlainString())
+                          .append(" | ").append(p.getTpPrice().toPlainString())
+                          .append(" | ").append(p.getSlPrice().toPlainString())
+                          .append(" | ").append(trend)
+                          .append(" | ").append(rsi)
+                          .append(" | ").append(stoch)
+                          .append(" |\n");
+                    });
+        }
+
         // ── By Day ──
         if (!closed.isEmpty()) {
             double riskEurDay = demoAccountBalance * demoRiskPercent / 100.0;
@@ -207,77 +245,25 @@ public class PositionReportService {
               .append("** |\n");
         }
 
-        // ── Open Positions ──
-        if (!open.isEmpty()) {
-            md.append("\n## Open Positions\n\n");
-            md.append("| Symbol | Dir | Signal | Entry | TP | SL | Trend | RSI f·m·s | Stoch K/D | Since |\n");
-            md.append("|--------|-----|--------|-------|----|----|-------|-----------|-----------|-------|\n");
-            open.stream()
-                    .sorted(Comparator.comparing(PositionOutcome::getEntryTime))
-                    .forEach(p -> {
-                        String dir = Boolean.TRUE.equals(p.getIsLong()) ? "▲" : "▼";
-                        String trend = p.getTrendState() != null ? switch (p.getTrendState()) {
-                            case "STRONG_UPTREND" -> "📈BULL";
-                            case "STRONG_DOWNTREND" -> "📉BEAR";
-                            default -> "—";
-                        } : "—";
-                        String rsi = (p.getRsiFast() != null)
-                                ? String.format("%.0f·%.0f·%.0f",
-                                    p.getRsiFast().doubleValue(),
-                                    p.getRsiMid() != null ? p.getRsiMid().doubleValue() : 0,
-                                    p.getRsiSlow() != null ? p.getRsiSlow().doubleValue() : 0)
-                                : "—";
-                        String stoch = (p.getStochK() != null)
-                                ? String.format("%.0f/%.0f", p.getStochK().doubleValue(),
-                                    p.getStochD() != null ? p.getStochD().doubleValue() : 0)
-                                : "—";
-                        md.append("| ").append(p.getSymbol())
-                          .append(" | ").append(dir)
-                          .append(" | ").append(p.getSignalType())
-                          .append(" | ").append(p.getEntryPrice().toPlainString())
-                          .append(" | ").append(p.getTpPrice().toPlainString())
-                          .append(" | ").append(p.getSlPrice().toPlainString())
-                          .append(" | ").append(trend)
-                          .append(" | ").append(rsi)
-                          .append(" | ").append(stoch)
-                          .append(" | ").append(p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT))
-                          .append(" |\n");
-                    });
-        }
-
-        // ── Recent Closed (last 20) ──
+        // ── All Closed Positions ──
         if (!closed.isEmpty()) {
             double riskEurExit = demoAccountBalance * demoRiskPercent / 100.0;
-            md.append("\n## Recent Exits (last 20)\n\n");
-            md.append("| Symbol | Dir | Signal | Trend | RSI f·m·s | Entry | Exit | P&L% | Est € | Result | Held |\n");
-            md.append("|--------|-----|--------|-------|-----------|-------|------|------|-------|--------|------|\n");
+            md.append("\n## All Closed Positions (").append(closed.size()).append(" total)\n\n");
+            md.append("| Entry Time (UTC) | Exit Time (UTC) | Symbol | Dir | Signal | P&L% | Est € | Result | Held |\n");
+            md.append("|------------------|-----------------|--------|-----|--------|------|-------|--------|------|\n");
             closed.stream()
-                    .sorted(Comparator.comparing(PositionOutcome::getExitTime).reversed())
-                    .limit(20)
+                    .sorted(Comparator.comparing(PositionOutcome::getEntryTime).reversed())
                     .forEach(p -> {
                         boolean win = Boolean.TRUE.equals(p.getTpHit());
                         boolean loss = Boolean.TRUE.equals(p.getSlHit());
                         String result = win ? "TP ✅" : loss ? "SL ❌" : "24h ➖";
                         double estEur = win ? riskEurExit * 2 : -riskEurExit;
                         String dir = Boolean.TRUE.equals(p.getIsLong()) ? "▲" : "▼";
-                        String trend = p.getTrendState() != null ? switch (p.getTrendState()) {
-                            case "STRONG_UPTREND" -> "📈";
-                            case "STRONG_DOWNTREND" -> "📉";
-                            default -> "—";
-                        } : "—";
-                        String rsi = (p.getRsiFast() != null)
-                                ? String.format("%.0f·%.0f·%.0f",
-                                    p.getRsiFast().doubleValue(),
-                                    p.getRsiMid() != null ? p.getRsiMid().doubleValue() : 0,
-                                    p.getRsiSlow() != null ? p.getRsiSlow().doubleValue() : 0)
-                                : "—";
-                        md.append("| ").append(p.getSymbol())
+                        md.append("| ").append(p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT))
+                          .append(" | ").append(p.getExitTime().atZone(ZoneOffset.UTC).format(FMT))
+                          .append(" | ").append(p.getSymbol())
                           .append(" | ").append(dir)
                           .append(" | ").append(p.getSignalType())
-                          .append(" | ").append(trend)
-                          .append(" | ").append(rsi)
-                          .append(" | ").append(p.getEntryPrice().toPlainString())
-                          .append(" | ").append(p.getExitPrice().toPlainString())
                           .append(" | ").append(String.format("%+.2f%%", p.getPnlPct().doubleValue()))
                           .append(" | ").append(estEur >= 0 ? "+" : "").append(String.format("€%.0f", estEur))
                           .append(" | ").append(result)

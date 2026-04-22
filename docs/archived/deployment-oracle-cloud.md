@@ -153,10 +153,10 @@ docker compose version
 mkdir -p ~/apps && cd ~/apps
 
 # Clone (you'll need to set up SSH key with GitHub, or use HTTPS)
-git clone git@github.com:yourusername/rsi-alert-service.git
-# OR: git clone https://github.com/yourusername/rsi-alert-service.git
+git clone git@github.com:yourusername/market-signals.git
+# OR: git clone https://github.com/yourusername/market-signals.git
 
-cd rsi-alert-service
+cd market-signals
 ```
 
 ### Create Environment File
@@ -196,7 +196,7 @@ TRADING_AUTO_EXECUTION_ENABLED=false
 **Option A — SCP:**
 ```bash
 # From your local machine
-scp -i ~/.ssh/oracle_key ~/.windsurf/rsi-alert-service/.env ubuntu@YOUR.IP:/home/ubuntu/apps/rsi-alert-service/
+scp -i ~/.ssh/oracle_key ~/.windsurf/market-signals/.env ubuntu@YOUR.IP:/home/ubuntu/apps/market-signals/
 ```
 
 **Option B — SSH copy-paste:**
@@ -366,7 +366,7 @@ docker stats
 
 ### Update Application
 ```bash
-cd ~/apps/rsi-alert-service
+cd ~/apps/market-signals
 git pull
 docker compose down
 docker compose up -d --build
@@ -378,7 +378,7 @@ docker compose up -d --build
 docker exec market-signals-postgres pg_dump -U postgres market_signals > backup_$(date +%F).sql
 
 # Transfer to local
-scp ubuntu@YOUR.IP:~/apps/rsi-alert-service/backup_*.sql .
+scp ubuntu@YOUR.IP:~/apps/market-signals/backup_*.sql .
 ```
 
 ### Restart Everything

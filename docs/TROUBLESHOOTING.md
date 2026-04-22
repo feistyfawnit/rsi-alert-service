@@ -137,6 +137,47 @@ make deploy    # AWS EC2
 
 ---
 
+## EC2 Memory & Health (t3.micro — 1 GB RAM)
+
+~912 MiB RAM, no swap. Memory is the tightest resource.
+
+### Current Tuning
+
+| Layer | Setting | Purpose |
+|-------|---------|---------|
+| JVM | `-Xmx320m -Xms128m` | Heap cap + start size |
+| JVM | `-XX:MaxMetaspaceSize=64m` | Class-metadata ceiling |
+| JVM | `-XX:MaxDirectMemorySize=32m` | Netty buffer cap |
+| JVM | `-XX:+UseSerialGC` | Lower overhead than G1 on 1 vCPU |
+| Docker app | `memory: 450M` | Hard container limit |
+| Docker Postgres | `memory: 100M` | Hard container limit |
+| Postgres | `shared_buffers=16MB` | Reduced from 128 MB default |
+
+### One-time: Add Swap
+
+Prevents OOM kills during GC spikes or build bursts:
+
+```bash
+ssh -i ~/.ssh/market-signals.pem ubuntu@108.128.230.238
+sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+### Quick Health Check
+
+```bash
+make remote-health       # load, memory, disk, containers
+make pull-reports        # copy EC2 reports/ → local Mac
+```
+
+**Automate the pull:** add to your Mac crontab:
+```bash
+crontab -e
+# Pull nightly at 2 AM
+0 2 * * * cd /Users/terryi/Windsurf/market-signals && make pull-reports >/dev/null 2>&1
+```
+
 ## Files to Check
 
 - `application.yml`: `ig-interval-seconds`, instrument list

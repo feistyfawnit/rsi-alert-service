@@ -2,6 +2,12 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: market-signals-postgres
+    command: >
+      postgres
+      -c shared_buffers=16MB
+      -c effective_cache_size=48MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=16MB
     environment:
       POSTGRES_DB: market_signals
       POSTGRES_USER: postgres
@@ -15,6 +21,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 100M
 
   app:
     build: .
@@ -50,6 +60,10 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 450M
 
 volumes:
   postgres_data:
