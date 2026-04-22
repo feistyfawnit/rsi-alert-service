@@ -20,6 +20,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -54,6 +55,9 @@ class SignalDetectionServiceTest {
     @Mock
     private TrendDetectionService trendDetectionService;
 
+    @Mock
+    private AnomalyNotificationService anomalyNotificationService;
+
     @InjectMocks
     private SignalDetectionService signalDetectionService;
 
@@ -63,6 +67,7 @@ class SignalDetectionServiceTest {
         ReflectionTestUtils.setField(signalDetectionService, "watchProximityThreshold", 40);
         ReflectionTestUtils.setField(signalDetectionService, "partialRequireFastTfAligned", true);
         ReflectionTestUtils.setField(signalDetectionService, "watchSignalsEnabled", false);
+        lenient().when(anomalyNotificationService.recentCriticalAnomalyFor(anyString(), anyInt())).thenReturn(false);
     }
 
     @Test

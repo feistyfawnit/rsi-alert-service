@@ -57,9 +57,21 @@ rsi:
     account-balance: 10000
     account-currency: EUR
     risk-percent: 1
+    # Fixed-pct stops — used as fallback when ATR data insufficient
     stop-percent-crypto: 2.0
     stop-percent-index: 1.0
     stop-percent-commodity: 1.0
+    # ATR-based stops — adapts to current volatility (1.5× ATR trend, 2× ATR OB/OS)
+    # Sampled on 15m timeframe; falls back to fixed-pct if < period+1 candles available
+    atr-stops-enabled: ${ATR_STOPS_ENABLED:true}
+    atr-period: ${ATR_PERIOD:14}
+    atr-multiplier-trend: ${ATR_MULTIPLIER_TREND:1.5}
+    atr-multiplier-default: ${ATR_MULTIPLIER_DEFAULT:2.0}
+    # Reward:Risk by asset class (trend signals only; non-trend always uses 2:1)
+    # Crypto lowered to 2:1 — SOL 5 wins were all 24h auto-closes, 3:1 target never hit
+    trend-rr-crypto: ${TREND_RR_CRYPTO:2.0}
+    trend-rr-index: ${TREND_RR_INDEX:3.0}
+    trend-rr-commodity: ${TREND_RR_COMMODITY:3.0}
     
   trend:
     ema-period: ${TREND_EMA_PERIOD:20}

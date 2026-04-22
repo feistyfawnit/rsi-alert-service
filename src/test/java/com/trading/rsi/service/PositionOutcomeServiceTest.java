@@ -7,6 +7,7 @@ import com.trading.rsi.event.SignalEvent;
 import com.trading.rsi.model.RsiSignal;
 import com.trading.rsi.repository.CandleHistoryRepository;
 import com.trading.rsi.repository.PositionOutcomeRepository;
+import com.trading.rsi.service.TrendDetectionService.TrendState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +39,12 @@ class PositionOutcomeServiceTest {
     @Mock
     private PriceHistoryService priceHistoryService;
 
+    @Mock
+    private AtrCalculator atrCalculator;
+
+    @Mock
+    private TrendDetectionService trendDetectionService;
+
     @InjectMocks
     private PositionOutcomeService service;
 
@@ -47,6 +54,16 @@ class PositionOutcomeServiceTest {
         ReflectionTestUtils.setField(service, "stopPercentIndex", 0.5);
         ReflectionTestUtils.setField(service, "stopPercentCommodity", 1.0);
         ReflectionTestUtils.setField(service, "signalCooldownHours", 1);
+        // ATR disabled here — tests exercise the fixed-pct fallback path.
+        // AtrCalculator integration is covered by AtrCalculatorTest.
+        ReflectionTestUtils.setField(service, "atrStopsEnabled", false);
+        ReflectionTestUtils.setField(service, "atrPeriod", 14);
+        ReflectionTestUtils.setField(service, "atrMultiplierTrend", 1.5);
+        ReflectionTestUtils.setField(service, "atrMultiplierDefault", 2.0);
+        ReflectionTestUtils.setField(service, "trendRrCrypto", 2.0);
+        ReflectionTestUtils.setField(service, "trendRrIndex", 3.0);
+        ReflectionTestUtils.setField(service, "trendRrCommodity", 3.0);
+        lenient().when(trendDetectionService.getTrendState(anyString())).thenReturn(TrendState.NEUTRAL);
     }
 
     // ── Signal creates position with correct TP/SL ──
@@ -129,9 +146,9 @@ class PositionOutcomeServiceTest {
         PositionOutcome pos = captor.getValue();
 
         assertTrue(pos.getIsLong());
-        // trend: stop = 50000 * 1% / 100 = 500pt; limit = 500 * 3 = 1500pt
+        // crypto trend: stop = 50000 * 1% / 100 = 500pt; limit = 500 * 2 (crypto R:R) = 1000pt
         assertEquals(new BigDecimal("49500"), pos.getSlPrice());
-        assertEquals(new BigDecimal("51500"), pos.getTpPrice());
+        assertEquals(new BigDecimal("51000"), pos.getTpPrice());
     }
 
     @Test
@@ -206,7 +223,7 @@ class PositionOutcomeServiceTest {
                 .build();
 
         CandleHistory candle = CandleHistory.builder()
-                .symbol("BTCUSDT").timeframe("1h")
+                .symbol("BTCUSDT").timeframe("15m")
                 .candleTime(entryTime.plus(1, ChronoUnit.HOURS))
                 .open(new BigDecimal("50500"))
                 .high(new BigDecimal("52500")) // above TP
@@ -215,7 +232,7 @@ class PositionOutcomeServiceTest {
                 .build();
 
         when(candleHistoryRepository.findBySymbolAndTimeframeAndCandleTimeBetweenOrderByCandleTimeAsc(
-                eq("BTCUSDT"), eq("1h"), eq(entryTime), any(Instant.class)))
+                eq("BTCUSDT"), eq("15m"), eq(entryTime), any(Instant.class)))
                 .thenReturn(List.of(candle));
 
         service.checkAndClosePosition(pos, Instant.now());
@@ -242,7 +259,7 @@ class PositionOutcomeServiceTest {
                 .build();
 
         CandleHistory candle = CandleHistory.builder()
-                .symbol("BTCUSDT").timeframe("1h")
+                .symbol("BTCUSDT").timeframe("15m")
                 .candleTime(entryTime.plus(1, ChronoUnit.HOURS))
                 .open(new BigDecimal("49800"))
                 .high(new BigDecimal("49900"))
@@ -251,7 +268,7 @@ class PositionOutcomeServiceTest {
                 .build();
 
         when(candleHistoryRepository.findBySymbolAndTimeframeAndCandleTimeBetweenOrderByCandleTimeAsc(
-                eq("BTCUSDT"), eq("1h"), eq(entryTime), any(Instant.class)))
+                eq("BTCUSDT"), eq("15m"), eq(entryTime), any(Instant.class)))
                 .thenReturn(List.of(candle));
 
         service.checkAndClosePosition(pos, Instant.now());
@@ -279,7 +296,7 @@ class PositionOutcomeServiceTest {
 
         // Candles exist but neither TP nor SL was hit
         CandleHistory candle = CandleHistory.builder()
-                .symbol("BTCUSDT").timeframe("1h")
+                .symbol("BTCUSDT").timeframe("15m")
                 .candleTime(entryTime.plus(1, ChronoUnit.HOURS))
                 .open(new BigDecimal("50100"))
                 .high(new BigDecimal("50500"))
@@ -288,7 +305,7 @@ class PositionOutcomeServiceTest {
                 .build();
 
         when(candleHistoryRepository.findBySymbolAndTimeframeAndCandleTimeBetweenOrderByCandleTimeAsc(
-                eq("BTCUSDT"), eq("1h"), eq(entryTime), any(Instant.class)))
+                eq("BTCUSDT"), eq("15m"), eq(entryTime), any(Instant.class)))
                 .thenReturn(List.of(candle));
         when(priceHistoryService.getLatestPrice("BTCUSDT")).thenReturn(new BigDecimal("50300"));
 
@@ -317,7 +334,7 @@ class PositionOutcomeServiceTest {
 
         // Candle within range — no TP or SL hit, and under 24h
         CandleHistory candle = CandleHistory.builder()
-                .symbol("BTCUSDT").timeframe("1h")
+                .symbol("BTCUSDT").timeframe("15m")
                 .candleTime(entryTime.plus(1, ChronoUnit.HOURS))
                 .open(new BigDecimal("50100"))
                 .high(new BigDecimal("50500"))
@@ -326,7 +343,7 @@ class PositionOutcomeServiceTest {
                 .build();
 
         when(candleHistoryRepository.findBySymbolAndTimeframeAndCandleTimeBetweenOrderByCandleTimeAsc(
-                eq("BTCUSDT"), eq("1h"), eq(entryTime), any(Instant.class)))
+                eq("BTCUSDT"), eq("15m"), eq(entryTime), any(Instant.class)))
                 .thenReturn(List.of(candle));
 
         service.checkAndClosePosition(pos, Instant.now());

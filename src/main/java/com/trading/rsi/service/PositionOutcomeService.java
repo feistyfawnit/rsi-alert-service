@@ -36,8 +36,10 @@ public class PositionOutcomeService {
     private final CandleHistoryRepository candleHistoryRepository;
     private final PriceHistoryService priceHistoryService;
     private final TrendDetectionService trendDetectionService;
+    private final AtrCalculator atrCalculator;
 
     private static final Duration MAX_HOLDING = Duration.ofHours(24);
+    private static final String ATR_TIMEFRAME = "15m";
 
     private static final Set<SignalLog.SignalType> TRACKED_SIGNALS = Set.of(
             SignalLog.SignalType.OVERSOLD,
@@ -57,6 +59,28 @@ public class PositionOutcomeService {
 
     @Value("${rsi.signal.cooldown-hours:1}")
     private int signalCooldownHours;
+
+    @Value("${rsi.demo.atr-stops-enabled:true}")
+    private boolean atrStopsEnabled;
+
+    @Value("${rsi.demo.atr-period:14}")
+    private int atrPeriod;
+
+    @Value("${rsi.demo.atr-multiplier-trend:1.5}")
+    private double atrMultiplierTrend;
+
+    @Value("${rsi.demo.atr-multiplier-default:2.0}")
+    private double atrMultiplierDefault;
+
+    // Reward:Risk by asset class (trend signals only; non-trend always uses 2:1)
+    @Value("${rsi.demo.trend-rr-crypto:2.0}")
+    private double trendRrCrypto;
+
+    @Value("${rsi.demo.trend-rr-index:3.0}")
+    private double trendRrIndex;
+
+    @Value("${rsi.demo.trend-rr-commodity:3.0}")
+    private double trendRrCommodity;
 
     @EventListener
     @Async
@@ -83,14 +107,9 @@ public class PositionOutcomeService {
                 || signal.getSignalType() == SignalLog.SignalType.TREND_SELL_RALLY;
 
         BigDecimal entry = signal.getCurrentPrice();
-        double stopPct = inferStopPercent(signal.getSymbol());
-        double effectiveStopPct = isTrend ? stopPct * 0.5 : stopPct;
-
-        long stopPts = Math.max(
-                Math.round(entry.doubleValue() * effectiveStopPct / 100.0),
-                Math.max(Math.round(entry.doubleValue() * 0.002), 2)
-        );
-        long limitPts = isTrend ? stopPts * 3 : stopPts * 2;
+        long stopPts = computeStopPoints(entry, signal.getSymbol(), isTrend);
+        double rr = isTrend ? trendRewardRatio(signal.getSymbol()) : 2.0;
+        long limitPts = Math.max(Math.round(stopPts * rr), stopPts + 1);
 
         BigDecimal tpPrice;
         BigDecimal slPrice;
@@ -324,7 +343,7 @@ public class PositionOutcomeService {
 
     /**
      * Retroactively recalculate all closed positions using the finest available candle
-     * timeframe (5m for crypto, 15m for IG). Useful after upgrading resolution logic.
+     * timeframe (15m for all asset classes). Useful after upgrading resolution logic.
      */
     public int recalculateClosedPositions() {
         List<PositionOutcome> closed = positionOutcomeRepository.findByExitTimeIsNotNull();
@@ -412,11 +431,10 @@ public class PositionOutcomeService {
     }
 
     private String finestExitTimeframe(String symbol) {
-        // Crypto: 5m candles available via Binance
-        if (!symbol.startsWith("IX.") && !symbol.startsWith("CS.") && !symbol.startsWith("CC.")) {
-            return "5m";
-        }
-        // IG indices/commodities: 15m candles
+        // All asset classes: 15m is the finest timeframe populated in candle_history
+        // for every configured instrument (crypto + IG). 5m is NOT polled for crypto
+        // under current config, which previously caused every crypto position to
+        // force-close at 24h instead of hitting TP/SL based on intraday candle wicks.
         return "15m";
     }
 
@@ -424,5 +442,44 @@ public class PositionOutcomeService {
         if (symbol.startsWith("IX.")) return stopPercentIndex;
         if (symbol.startsWith("CS.") || symbol.startsWith("CC.")) return stopPercentCommodity;
         return stopPercentCrypto;
+    }
+
+    private double trendRewardRatio(String symbol) {
+        if (symbol.startsWith("IX.")) return trendRrIndex;
+        if (symbol.startsWith("CS.") || symbol.startsWith("CC.")) return trendRrCommodity;
+        return trendRrCrypto;
+    }
+
+    /**
+     * Compute stop distance in price points.
+     *
+     * Preferred: ATR(N) * multiplier on the 15m timeframe — adapts to current volatility.
+     * Fallback: fixed-pct based on asset class (halved for trend signals to reflect
+     * higher-probability setups and tighter risk).
+     *
+     * A minimum stop of 0.2% (or 2 price points) prevents sub-tick stops on low-priced
+     * instruments.
+     */
+    long computeStopPoints(BigDecimal entry, String symbol, boolean isTrend) {
+        long floor = Math.max(Math.round(entry.doubleValue() * 0.002), 2);
+
+        if (atrStopsEnabled) {
+            var atrOpt = atrCalculator.computeAtr(symbol, ATR_TIMEFRAME, atrPeriod);
+            if (atrOpt.isPresent()) {
+                double multiplier = isTrend ? atrMultiplierTrend : atrMultiplierDefault;
+                long atrPts = Math.round(atrOpt.get().doubleValue() * multiplier);
+                long result = Math.max(atrPts, floor);
+                log.debug("ATR stop for {} {}: ATR={} x{} = {}pt (entry={})",
+                        symbol, isTrend ? "TREND" : "NORMAL",
+                        atrOpt.get().toPlainString(), multiplier, result, entry.toPlainString());
+                return result;
+            }
+            log.debug("ATR unavailable for {} — falling back to fixed-pct stop", symbol);
+        }
+
+        double stopPct = inferStopPercent(symbol);
+        double effectiveStopPct = isTrend ? stopPct * 0.5 : stopPct;
+        long fixedPts = Math.round(entry.doubleValue() * effectiveStopPct / 100.0);
+        return Math.max(fixedPts, floor);
     }
 }

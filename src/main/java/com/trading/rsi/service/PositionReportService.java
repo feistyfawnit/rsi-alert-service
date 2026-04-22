@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 public class PositionReportService {
 
     private final PositionOutcomeRepository positionOutcomeRepository;
+    private final PriceHistoryService priceHistoryService;
 
     @Value("${pnl.report.path:./reports/pnl-report.md}")
     private String reportPath;
@@ -85,9 +86,13 @@ public class PositionReportService {
             double avgPnl = closed.stream().mapToDouble(p -> p.getPnlPct().doubleValue()).average().orElse(0);
             double winRate = (double) wins / closed.size() * 100;
             double riskEur = demoAccountBalance * demoRiskPercent / 100.0;
-            double eurWins = wins * riskEur * 2;          // 2:1 R:R default
-            double eurLosses = (closed.size() - wins) * riskEur;
-            double netEur = eurWins - eurLosses;
+
+            // R-multiple based € estimate: 24h auto-closes at +2R count as +2R, not a fixed win/loss.
+            double eurWins = closed.stream()
+                    .mapToDouble(p -> Math.max(0, estEur(p, riskEur))).sum();
+            double eurLosses = closed.stream()
+                    .mapToDouble(p -> Math.min(0, estEur(p, riskEur))).sum();
+            double netEur = eurWins + eurLosses;
 
             md.append("| Win rate | **").append(String.format("%.0f%%", winRate))
               .append("** (").append(wins).append("/").append(closed.size()).append(") |\n");
@@ -96,8 +101,8 @@ public class PositionReportService {
             md.append("| SL hits | ").append(slHits).append(" |\n");
             md.append("| Auto-closes (24h) | ").append(closed.size() - tpHits - slHits).append(" |\n");
             md.append("| Risk per trade | €").append(String.format("%.0f", riskEur)).append(" |\n");
-            md.append("| Gross wins (2:1) | **+€").append(String.format("%.0f", eurWins)).append("** |\n");
-            md.append("| Gross losses | **-€").append(String.format("%.0f", eurLosses)).append("** |\n");
+            md.append("| Gross wins (R-weighted) | **+€").append(String.format("%.0f", eurWins)).append("** |\n");
+            md.append("| Gross losses | **€").append(String.format("%.0f", eurLosses)).append("** |\n");
             md.append("| **Net P&L (est.)** | **").append(netEur >= 0 ? "+" : "").append(String.format("€%.0f", netEur)).append("** |\n");
         } else {
             md.append("\n*No closed positions yet — results appear after signals fire and 24h elapses.*\n");
@@ -118,7 +123,7 @@ public class PositionReportService {
                         long w = group.stream().filter(p -> p.getPnlPct().compareTo(BigDecimal.ZERO) > 0).count();
                         double wr = (double) w / group.size() * 100;
                         double avg = group.stream().mapToDouble(p -> p.getPnlPct().doubleValue()).average().orElse(0);
-                        double net = (w * riskEurInst * 2) - ((group.size() - w) * riskEurInst);
+                        double net = group.stream().mapToDouble(p -> estEur(p, riskEurInst)).sum();
                         md.append("| ").append(entry.getKey())
                           .append(" | ").append(group.size())
                           .append(" | ").append(w)
@@ -159,11 +164,12 @@ public class PositionReportService {
                     });
         }
 
-        // ── Open Positions ──
+        // ── Open Positions (with live unrealized P&L) ──
         if (!open.isEmpty()) {
             md.append("\n## Open Positions\n\n");
-            md.append("| Entry Time (UTC) | Symbol | Dir | Signal | Entry | TP | SL | Trend | RSI f·m·s | Stoch K/D |\n");
-            md.append("|------------------|--------|-----|--------|-------|----|----|-------|-----------|-----------|\n");
+            md.append("| Entry Time (UTC) | Symbol | Dir | Signal | Entry | Now | Unreal % | Est € | →TP % | →SL % | TP | SL | Trend | RSI f·m·s |\n");
+            md.append("|------------------|--------|-----|--------|-------|-----|----------|-------|-------|-------|----|----|-------|-----------|\n");
+            double riskEurOpen = demoAccountBalance * demoRiskPercent / 100.0;
             open.stream()
                     .sorted(Comparator.comparing(PositionOutcome::getEntryTime).reversed())
                     .forEach(p -> {
@@ -179,20 +185,48 @@ public class PositionReportService {
                                     p.getRsiMid() != null ? p.getRsiMid().doubleValue() : 0,
                                     p.getRsiSlow() != null ? p.getRsiSlow().doubleValue() : 0)
                                 : "—";
-                        String stoch = (p.getStochK() != null)
-                                ? String.format("%.0f/%.0f", p.getStochK().doubleValue(),
-                                    p.getStochD() != null ? p.getStochD().doubleValue() : 0)
-                                : "—";
+
+                        BigDecimal now2 = priceHistoryService.getLatestPrice(p.getSymbol());
+                        String nowStr = now2 != null ? now2.toPlainString() : "—";
+                        String unrealPctStr = "—";
+                        String estEurStr = "—";
+                        String toTpStr = "—";
+                        String toSlStr = "—";
+                        if (now2 != null) {
+                            double entry = p.getEntryPrice().doubleValue();
+                            double cur   = now2.doubleValue();
+                            double unrealPct = (Boolean.TRUE.equals(p.getIsLong())
+                                    ? (cur - entry) / entry
+                                    : (entry - cur) / entry) * 100.0;
+                            unrealPctStr = String.format("%+.2f%%", unrealPct);
+
+                            double stopPctAtEntry = Math.abs(entry - p.getSlPrice().doubleValue()) / entry * 100.0;
+                            if (stopPctAtEntry > 0) {
+                                double r = unrealPct / stopPctAtEntry;
+                                double eur = r * riskEurOpen;
+                                estEurStr = (eur >= 0 ? "+" : "") + String.format("€%.0f", eur);
+                            }
+
+                            double tpDist = Math.abs(p.getTpPrice().doubleValue() - cur) / cur * 100.0;
+                            double slDist = Math.abs(p.getSlPrice().doubleValue() - cur) / cur * 100.0;
+                            toTpStr = String.format("%.2f%%", tpDist);
+                            toSlStr = String.format("%.2f%%", slDist);
+                        }
+
                         md.append("| ").append(p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT))
                           .append(" | ").append(p.getSymbol())
                           .append(" | ").append(dir)
                           .append(" | ").append(p.getSignalType())
                           .append(" | ").append(p.getEntryPrice().toPlainString())
+                          .append(" | ").append(nowStr)
+                          .append(" | ").append(unrealPctStr)
+                          .append(" | ").append(estEurStr)
+                          .append(" | ").append(toTpStr)
+                          .append(" | ").append(toSlStr)
                           .append(" | ").append(p.getTpPrice().toPlainString())
                           .append(" | ").append(p.getSlPrice().toPlainString())
                           .append(" | ").append(trend)
                           .append(" | ").append(rsi)
-                          .append(" | ").append(stoch)
                           .append(" |\n");
                     });
         }
@@ -220,7 +254,9 @@ public class PositionReportService {
                         long dayLosses  = day.stream().filter(p -> p.getExitTime() != null
                                 && Boolean.TRUE.equals(p.getSlHit())).count();
                         long dayExpired = dayClosed - dayWins - dayLosses;
-                        double dayNet   = (dayWins * riskEurDay * 2) - (dayLosses * riskEurDay);
+                        double dayNet   = day.stream()
+                                .filter(p -> p.getExitTime() != null)
+                                .mapToDouble(p -> estEur(p, riskEurDay)).sum();
                         totSignals[0] += day.size(); totClosed[0] += dayClosed;
                         totWins[0] += dayWins; totLosses[0] += dayLosses;
                         totExpired[0] += dayExpired; totNet[0] += dayNet;
@@ -257,7 +293,7 @@ public class PositionReportService {
                         boolean win = Boolean.TRUE.equals(p.getTpHit());
                         boolean loss = Boolean.TRUE.equals(p.getSlHit());
                         String result = win ? "TP ✅" : loss ? "SL ❌" : "24h ➖";
-                        double estEur = win ? riskEurExit * 2 : -riskEurExit;
+                        double estEur = estEur(p, riskEurExit);
                         String dir = Boolean.TRUE.equals(p.getIsLong()) ? "▲" : "▼";
                         md.append("| ").append(p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT))
                           .append(" | ").append(p.getExitTime().atZone(ZoneOffset.UTC).format(FMT))
@@ -299,7 +335,7 @@ public class PositionReportService {
                     : Boolean.TRUE.equals(p.getSlHit()) ? "LOSS" : "EXPIRED";
             double estEur = 0;
             if (p.getPnlPct() != null && p.getExitTime() != null) {
-                estEur = "WIN".equals(result) ? riskEur * 2 : -riskEur;
+                estEur = estEur(p, riskEur);
             }
             csv.append(p.getId()).append(",")
                .append(direction).append(",")
@@ -317,5 +353,24 @@ public class PositionReportService {
                .append("\n");
         }
         return csv.toString();
+    }
+
+    /**
+     * R-multiple € estimate: uses actual pnlPct vs. the stop distance at entry.
+     *
+     * R = pnlPct / stopPctAtEntry, then € = R * riskEur.
+     *
+     * This correctly credits 24h auto-closes at e.g. +2.8% with a 1% stop as +2.8R ≈ +€280,
+     * not as a fixed-€ loss. For positions still open or missing P&L it returns 0.
+     */
+    private double estEur(PositionOutcome p, double riskEur) {
+        if (p.getPnlPct() == null || p.getExitTime() == null
+                || p.getEntryPrice() == null || p.getSlPrice() == null) return 0;
+        double entry = p.getEntryPrice().doubleValue();
+        if (entry <= 0) return 0;
+        double stopPct = Math.abs(entry - p.getSlPrice().doubleValue()) / entry * 100.0;
+        if (stopPct <= 0) return 0;
+        double rMultiple = p.getPnlPct().doubleValue() / stopPct;
+        return rMultiple * riskEur;
     }
 }

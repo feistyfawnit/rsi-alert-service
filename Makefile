@@ -44,7 +44,7 @@ pnl-report:
 
 deploy:
 	@echo "🚀 Deploying to AWS EC2 ($(EC2_IP))..."
-	$(SSH) "cd $(APP_DIR) && git pull origin main && docker-compose down && docker-compose up -d --build && docker-compose ps"
+	$(SSH) "cd $(APP_DIR) && git fetch origin main && git reset --hard origin/main && docker-compose down && docker-compose up -d --build && docker-compose ps"
 	@echo "✅ Deploy complete — run 'make remote-logs' to watch"
 
 remote-logs:

@@ -2,6 +2,7 @@ package com.trading.rsi.service;
 
 import com.trading.rsi.event.AnomalyEvent;
 import com.trading.rsi.model.AnomalyAlert;
+import com.trading.rsi.repository.AnomalyLogRepository;
 import com.trading.rsi.repository.SignalLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,9 @@ class AnomalyNotificationServiceTest {
 
     @Mock
     private SignalLogRepository signalLogRepository;
+
+    @Mock
+    private AnomalyLogRepository anomalyLogRepository;
 
     @InjectMocks
     private AnomalyNotificationService notificationService;

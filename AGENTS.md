@@ -35,6 +35,13 @@ If you are reviewing or changing this repo, read in this order:
   - a direct one-candle `/prices/.../1` curl test
 - `application.yml` seeds instruments, but stale DB rows can still exist after epic changes; restarting and checking enabled instruments/logs matters
 
+## Risk model (as of 2026-04-22)
+
+- **Stops**: ATR(14) on 15m × multiplier (1.5 trend, 2.0 non-trend). Falls back to fixed-pct (`stop-percent-*`) when ATR unavailable. Toggle via `rsi.demo.atr-stops-enabled`.
+- **Reward:Risk** (trend signals): crypto 2:1, indices 3:1, commodities 3:1. Non-trend always 2:1. Configurable per asset class under `rsi.demo.trend-rr-*`.
+- **Crypto 2:1** was lowered from 3:1 after SOL produced 5 wins all via 24h auto-close at +2–3% with zero TP hits — 3:1 target was unreachable on a 24h horizon.
+- **P&L report** uses R-multiple €-estimation: `€ = (pnlPct / stopPctAtEntry) × riskEur`. This correctly credits 24h auto-closes with positive P&L (was previously mis-classified as fixed-€ losses).
+
 ## Canonical Truth vs Historical Docs
 
 - **Current truth**:

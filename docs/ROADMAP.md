@@ -145,6 +145,23 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 ---
 
+## ✅ Recent Addition — ATR Stops + Asset-Class R:R + R-Multiple P&L (April 22 2026)
+
+**Problem:** First 4 days of live P&L data showed −€300 net across 18 trades, but the loss was entirely from IG indices (0/10 win rate on DAX/FTSE/S&P — every trade stopped out at −0.25%). SOL ran 5/8 wins but every win was a 24h auto-close at +2–3% because (a) the 3:1 TP at a 1% stop was unreachable in 24h, and (b) `finestExitTimeframe` queried `5m` crypto candles which were never actually polled, so intraday TP/SL detection never fired. Meanwhile the P&L report's `Est €` column was scoring those +2.8% auto-closes as fixed-€ losses, grossly understating SOL performance.
+
+**Solution (4 parts):**
+
+| Change | Where | Effect |
+|--------|-------|--------|
+| ATR(14) × multiplier stops | `AtrCalculator`, `PositionOutcomeService.computeStopPoints` | Stop width adapts to current 15m volatility (1.5× trend, 2.0× non-trend). Falls back to fixed-pct when <15 candles available. Toggle: `rsi.demo.atr-stops-enabled`. |
+| Trend R:R split by asset class | `rsi.demo.trend-rr-{crypto,index,commodity}` | Crypto 2:1 (was 3:1 and unreachable); indices/commodities still 3:1. |
+| Crypto exit TF aligned to populated data | `PositionOutcomeService.finestExitTimeframe` | Unified to `15m` across all asset classes (5m was never polled for crypto under current config; caused every crypto position to 24h-auto-close). |
+| R-multiple € estimation in report | `PositionReportService.estEur` | `€ = (pnlPct / stopPctAtEntry) × riskEur`. Fixes 24h auto-closes being counted as fixed losses. Unrealized P&L + →TP/SL % columns added to Open Positions table. |
+
+**Result:** The −€300 net was a reporting artifact on top of one fixable structural issue (unreachable crypto TP). With the fixes in, SOL performance tells the true story and IG stops react to volatility instead of triggering on noise.
+
+---
+
 ## Prioritised Backlog
 
 > Timelines assume part-time development (~2–4 hrs/week). P1 = do soon, P2 = next sprint, P3 = future.
@@ -166,6 +183,9 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 | Item | Effort | Notes |
 |------|--------|-------|
+| **Volatility-spike entry filter** | ~1h | `AtrCalculator.atrExpansionRatio` is already built. Wire into `SignalDetectionService` to skip signals when current 15m ATR > 1.5× its 20-period average — avoids entering during news-driven whipsaw. Gated by new `rsi.demo.atr-spike-filter-enabled` flag. |
+| **Volume confirmation for crypto dips** | ~2h | Require the entry candle's volume > N× the 20-period mean before firing a TREND_BUY_DIP on crypto. Tighter crypto filter; indices don't need it (IG volume data is unreliable). Config: `rsi.demo.volume-confirmation-threshold`. |
+| **ATR-stops A/B tracking** | ~1h | Persist `stop_basis` (`ATR_1.5` / `FIXED_0.5`) on `PositionOutcome` so `PositionReportService` can group win-rate and expectancy by stop source. Required before deciding whether to leave ATR permanently on or per-asset-class. |
 | **Price Momentum Surge Detector** | ~4h | Detects rapid price moves (>0.5% in 15min or >1% in 1h) *before* RSI aligns. Require simultaneous surge across 2+ indices (e.g. S&P + DAX) to filter noise. Bidirectional. Catches institutional flow / news leaks like the April 7 pre-announcement buying. Uses existing candle data — no new API calls. |
 | **Stochastic Confirmation Layer** | ~3h | Add %K (14,3,3) as optional confirmation on RSI signals. Computable from existing OHLC data. See `PROJECT_LOG.md` for proposed logic. |
 | **Self-Service Telegram Onboarding** | ~3h | New users message bot `/start` → admin gets DM *"@username (987654321) requests alerts — /approve 987654321 /reject 987654321"*. Approved IDs hot-reloaded into `TELEGRAM_CHAT_IDS` without restart. Store `PendingSubscriber` in DB with approval audit trail. Eliminates manual `curl getUpdates` step. |
@@ -174,6 +194,7 @@ See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `
 
 | Item | Effort | Notes |
 |------|--------|-------|
+| **Restore 5m granularity for crypto exits** | ~1h | If 15m exit candles ever miss wick-based TP/SL on fast SOL moves, add `5m` to SOL's `timeframes` in `application.yml` so 5m candles persist to `candle_history`, then revert `PositionOutcomeService.finestExitTimeframe` to the original `5m`/`15m` split. Deferred: Binance is free so no API-cost concern, but adds a 5m RSI series that would affect signal alignment counts — review signal logic first. |
 | **Cross-instrument Correlation Detector** | ~6h | Flag when 3+ indices align simultaneously (e.g. DAX + FTSE + S&P all oversold) — stronger signal. Part of Phase 5 spec. |
 | **High Uncertainty Mode Toggle** | ~2h | Suppress all signals except urgent full-alignment when VIX-equivalent is elevated. Part of Phase 5 spec. |
 | **Phase 4 Auto-Trading (enable)** | weeks | Hard-disabled. Requires 3+ months paper trading first. Do not rush. |
