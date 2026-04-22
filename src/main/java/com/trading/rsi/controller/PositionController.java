@@ -29,12 +29,6 @@ public class PositionController {
         return positionReportService.generateReport();
     }
 
-    @PostMapping("/pnl-report/write")
-    public Map<String, Object> writePnlReport() {
-        positionReportService.writeScheduledReport();
-        return Map.of("status", "written", "message", "P&L report updated");
-    }
-
     @GetMapping(value = "/pnl-report/csv", produces = "text/csv")
     public String getPnlCsv() {
         return positionReportService.generateCsv();
