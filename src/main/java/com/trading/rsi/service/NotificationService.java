@@ -84,6 +84,11 @@ public class NotificationService {
     public void handleSignalEvent(SignalEvent event) {
         
         RsiSignal signal = event.getSignal();
+        if (signal.isSilent()) {
+            log.debug("Silent mode active for {} {} — recording only, no Telegram alert",
+                    signal.getSymbol(), signal.getSignalType());
+            return;
+        }
         boolean isFullSignal = signal.getTimeframesAligned() >= signal.getTotalTimeframes();
         if (mutedSymbols.contains(signal.getSymbol())) {
             log.debug("Symbol {} is muted, suppressing all signals", signal.getSymbol());

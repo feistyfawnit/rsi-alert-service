@@ -1,230 +1,91 @@
-# LucidLynx Market Signals — Phase Completion Status & Next Steps
+# LucidLynx Market Signals — Roadmap
 
-*All phases 1–5 scaffolded March–April 2026*
-
----
-
-## ✅ Phase 1 — Core Multi-Indicator Alert Engine — COMPLETE
-
-- Spring Boot app running in Docker
-- Binance API for crypto: SOL (live), BTC (re-enabled Apr 21 — history collection, TREND_BUY_DIP suppressed), ETH/BCH (disabled)
-- RSI calculation across 15m / 1h / 4h timeframes
-- Push notifications on signal — live (originally ntfy.sh, migrated to Telegram April 2026)
-- PostgreSQL watchlist with CRUD REST API
-- Configurable thresholds, cooldown, quiet hours
-- **Trend Detection** (April 2026) — tracks consecutive overbought/oversold signals, suppresses counter-trend signals, generates TREND_BUY_DIP / TREND_SELL_RALLY alerts
+*Live on AWS EC2 (eu-west-1). Phase 1–5 scaffolded March–April 2026. For deeper architecture notes see `architecture.md`; for risk decisions see `risk-register.md`; for full signal-design narrative see `project-log.md`.*
 
 ---
 
-## ✅ Phase 2 — IG API Integration — COMPLETE
+## Phase Status
 
-- IG live API authenticated (spread bet account)
-- DAX 40, FTSE, S&P 500, Gold, Oil seeded — enable via YAML
-- Session auto-refresh every 6 hours
-- DataInitializer upserts instruments from YAML on every restart
-- Test endpoints: `/api/test/notify`, `/api/test/lower-thresholds`, `/api/test/ig/search`
-
----
-
-## ✅ Phase 3 — AI Layer — INFRASTRUCTURE BUILT, API KEY NEEDED
-
-- `ClaudeEnrichmentService` built and wired into `NotificationService`
-- Disabled by default (`CLAUDE_ENABLED=false`)
-- Enable with: `CLAUDE_ENABLED=true` + `CLAUDE_API_KEY` from console.anthropic.com
-- ~$5 of Haiku credits = weeks/months of enriched alerts at current signal frequency
+| Phase | Status | Notes |
+|-------|--------|-------|
+| 1 — Core multi-indicator alerts | ✅ Live | Binance + IG; RSI across 15m/1h/4h; Telegram (ntfy.sh retired Apr 2026). |
+| 2 — IG API integration | ✅ Live | Session auto-refresh; DAX / FTSE / S&P / Gold / Oil / Silver seeded. |
+| 3 — Claude AI enrichment | ✅ Built, disabled | Set `CLAUDE_API_KEY` + `CLAUDE_ENABLED=true`. ~$5–10/mo. |
+| 4 — Semi-automated trading | ✅ Scaffolded, hard-disabled | Requires 3+ months paper-trade validation. Kill switch: `POST /api/trading/kill-switch/activate`. |
+| 5 — Anomaly / geopolitical | ⏳ Partial | Volume spike + Polymarket monitor live. Correlation + Uncertainty Mode not started. |
 
 ---
 
-## ✅ Phase 4 — Semi-Automated Trading — SCAFFOLDED, HARD-DISABLED
+## ✅ Completed Milestones (newest first)
 
-⚠️ **HIGH RISK — DO NOT ENABLE WITHOUT DEMO VALIDATION** ⚠️
-
-- `IGTradingService` built with kill switch, daily loss limit, max concurrent positions
-- Requires manual approval flag by default (`TRADING_REQUIRE_MANUAL_APPROVAL=true`)
-- Hard-disabled: `TRADING_AUTO_EXECUTION_ENABLED=false`
-
-### Prerequisites before enabling (non-negotiable):
-- [ ] 3+ months of signal validation (paper trading)
-- [ ] Proven positive P&L in paper trading
-- [ ] IG demo account testing completed (minimum 1 month)
-- [ ] Risk management parameters reviewed and set conservatively
-- [ ] Kill switch tested and confirmed working
-
-### Risk Management (mandatory config):
-- **Max position size:** 2% of capital per trade (configurable)
-- **Max concurrent positions:** 2 (configurable)
-- **Daily loss limit:** 2% of account balance
-- **Manual approval:** required for every auto-trade initially
-
-Kill switch: `POST /api/trading/kill-switch/activate`
-
----
-
-## ⏳ Phase 5 — Anomaly / Geopolitical Detection — PARTIALLY BUILT
-
-### ✅ Done:
-- `VolumeAnomalyDetector` — live, fires on 4σ volume spikes per instrument
-- `AnomalyNotificationService` — urgent ntfy.sh alerts bypassing quiet hours
-- `AnomalyProperties` / `AnomalyEvent` / `AnomalyAlert` model — complete
-- `application.yml` anomaly config including Polymarket market slugs
-
-### ✅ Also built:
-- **`PolymarketMonitorService`** — polls configured Polymarket slugs every 5 min, fires anomaly alerts on odds shifts ≥8pp
-
-### ⏳ Not yet built:
-- **Cross-instrument correlation detector** — planned, not started
-- **High Uncertainty Mode toggle** — planned, not started
-
-See Section 11 of `rsi-alert-tool-requirements.md` for full specification. See `RISK_REGISTER.md` for risks and config decisions.
+| Date | Milestone | Details |
+|------|-----------|---------|
+| 2026-04-22 | **Silent signal recording** | Per-instrument `trend-buy-dip-notify` flag — signals log to `position_outcomes` without Telegram alert. S&P 500 TREND_BUY_DIP now silent pending ≥20 trade sample. |
+| 2026-04-22 | **Crypto enabled broadly** | BTC + ETH TREND_BUY_DIP re-enabled after R:R drop to 2:1 (previously unreachable at 3:1). |
+| 2026-04-22 | **ATR stops + asset-class R:R + R-multiple P&L** | `AtrCalculator` on 15m; stops = ATR × 1.5 (trend) / 2.0 (other). Trend R:R now 2:1 crypto / 3:1 indices. Report €-estimate uses `pnlPct / stopPctAtEntry × riskEur` so 24h auto-closes at +P&L count correctly. Unified crypto exit timeframe to 15m (fixes the SOL 24h auto-close bug where 5m was never polled). |
+| 2026-04-22 | **Open positions at top of P&L report** | Same columns as Closed table so rows align visually. Added `Realistic Net` line excluding (symbol, signalType) combos with ≥3 trades and 0 TP hits. |
+| 2026-04-22 | **Candle history CSV backup** | `make candles-backup-local` / `make candles-backup-remote` dumps `candle_history` via `\copy` for offline analysis. |
+| 2026-04-21 | **BTC re-enabled** | Added back to watchlist for history collection after fixing its data gap. |
+| 2026-04-18 | **P&L report with EUR totals + CSV endpoint** | `GET /api/positions/pnl-report/csv`; By-instrument breakdown; Makefile `remote-report` / `remote-csv`. |
+| 2026-04-17 | **Duplicate position guard** | `PositionOutcomeService.handleSignalEvent` skips creating a second open position for the same symbol. |
+| 2026-04-16 | **Candle history persistence (DB)** | `CandleHistory` entity; ~2,900 candles loaded on startup; RSI accuracy preserved across restarts. |
+| 2026-04-14…16 | **Trend Detection v2 + v2.1** | EMA20(1h) primary trend filter + momentum fallback + consecutive-signal fallback. TREND_BUY_DIP / TREND_SELL_RALLY signal types. Stops at half width, trend limits at 3× stop. Suppresses counter-trend signals immediately after warmup. |
+| 2026-04-XX | **Deployed to AWS EC2** | Live on `108.128.230.238` (eu-west-1). See `docs/remote-deployment.md`. |
+| 2026-04-XX | **ntfy.sh → Telegram migration** | Private bot `@LucidLynx1_bot`; chat-id whitelist in `TELEGRAM_CHAT_IDS`. ntfy code fully removed. |
+| 2026-04-XX | **Phase 5 anomaly scaffolding** | `VolumeAnomalyDetector` (4σ), `AnomalyNotificationService`, `PolymarketMonitorService` (5-min polling, ≥8pp odds shift). |
+| 2026-04-XX | **Phase 4 auto-trading scaffold** | `IGTradingService` behind kill switch + manual-approval flag + daily loss limit + max-concurrent. Hard-disabled in code. |
+| 2026-04-XX | **Phase 3 Claude enrichment built** | `ClaudeEnrichmentService` wired into `NotificationService`; disabled by default. |
+| 2026-04-XX | **Phase 2 IG integration** | Live spread-bet auth; 6-hour session refresh; watchlist upsert on every restart via `DataInitializer`. |
+| 2026-03–04 | **Phase 1 core engine** | Spring Boot + Postgres + Docker; multi-TF RSI; watchlist CRUD REST; cooldown / quiet-hours; repo renamed `rsi-alert-service → market-signals`. |
 
 ---
 
-## Data Source Strategy
+## 🎯 Active Backlog
 
-| Source | Cost | Coverage | Status |
-|--------|------|----------|--------|
-| Binance | FREE | Crypto (SOL, BTC, ETH, BCH) | ✅ Live |
-| IG API | FREE (with account) | Indices, FX, commodities, crypto | ✅ Live |
-| Finnhub | Paid for indices | Stocks, some indices | ❌ Free tier insufficient |
-| Twelve Data | Paid for indices | Stocks, crypto | ❌ Rate limits too low (8/min) |
-
----
-
-## Cost Summary
-
-| Phase | Monthly Cost | Status |
-|-------|-------------|--------|
-| Phase 1 (crypto RSI + trend detection) | $0 local / $0 AWS Free Tier / ~€15 post-free | ✅ Ready to deploy |
-| Phase 2 (IG indices) | $0-15 AWS | ✅ Ready — enable IG credentials |
-| Phase 3 (Claude AI) | $7-10 | ✅ Ready — add `CLAUDE_API_KEY` |
-| Phase 4 (auto-trading) | $5-10 | ⛔ Do not enable without 3+ months paper trading |
-| Phase 5 (anomaly) | $0 | ⏳ Volume spike + Polymarket monitor live; cross-correlation not built yet |
-
-### Hosting Comparison
-
-| | **Render** | **Railway** | **AWS Free Tier** |
-|--|------------|-------------|-------------------|
-| **Cost** | $0 (sleeps) / $7+ always-on | $5/mo flat | $0 for 12 months, then ~$15-20/mo |
-| **Sleeps?** | Yes — free tier spins down after 15min | No | No |
-| **CV Value** | Low | Low | **High** — shows AWS/container skills |
-| **PostgreSQL** | Paid add-on | Built-in | RDS free tier or EC2 self-hosted |
-| **Complexity** | Low | Low | Medium — VPC, IAM, ECS/Fargate |
-| **SSL/Domain** | Automatic | Automatic | Manual ACM setup |
-| **CI/CD** | GitHub auto-deploy | GitHub auto-deploy | GitHub Actions → ECR → ECS |
-| **Best for** | Quick demos | Production, always-on | Learning AWS, CV building |
-
----
-
-## ✅ Recent Addition — Trend Detection v2 + v2.1 (April 14–16 2026)
-
-**Problem:** You were shorting into strong uptrends — RSI overbought signals fire repeatedly in bull markets, but the trend keeps running up. The original fix (counting 3+ consecutive signals) still let you enter 1–2 bad trades before suppression kicked in. A second issue (cold-start): EMA50 required 50+ hourly candles, leaving a ~50h window where trend state was NEUTRAL and counter-trend signals were not suppressed.
-
-**Solution:** `TrendDetectionService` uses **EMA 20 on the 1h timeframe** as the primary trend filter (available immediately after the 28-candle warmup), with two fallbacks:
-
-| Condition | Action |
-|-----------|--------|
-| Price above EMA20(1h) | `STRONG_UPTREND` — suppress OVERBOUGHT sell signals immediately |
-| Price below EMA20(1h) | `STRONG_DOWNTREND` — suppress OVERSOLD buy signals immediately |
-| EMA history insufficient (< 20 candles) | Fallback 1: price momentum over last 5 candles |
-| Price moved >1% over last 5 1h candles | `STRONG_UPTREND` or `STRONG_DOWNTREND` via momentum |
-| Neither EMA nor momentum available | Fallback 2: 2+ consecutive same-direction signals |
-
-**Dip entry (TREND_BUY_DIP):** Fires when fastest-TF RSI drops **below 60** (pulled back from overbought >70) while price remains **above EMA20(1h)**. This is the classic "buy the dip in an uptrend" setup — momentum cooled, structure intact.
-
-**Rally entry (TREND_SELL_RALLY):** Mirror — RSI bounces **above 40** while price **below EMA20(1h)**.
-
-**Risk settings for trend trades:**
-- Stop: half normal width (e.g. 0.25% for indices vs 0.5% standard)
-- Limit: 3× stop distance (3:1 R:R vs 2:1 standard)
-
-**Config:** `rsi.trend.ema-period: 20`, `rsi.trend.ema-timeframe: 1h`, `rsi.trend.consecutive-signals-for-trend: 2` (fallback)
-
-**Notification:** `🐂 STRONG UPTREND — price above EMA20(1h)` or `🐂 STRONG UPTREND — 1.2% move in 5 1h candles (momentum proxy)`
-
-**Result:** From warmup completion (~28h), if price sits above its 20-hour EMA, the next sell signal is suppressed *immediately* — no more losing shorts into bull markets. You instead get **📈 TREND BUY (Dip)** when RSI cools toward 60.
-
----
-
-## ✅ Recent Addition — ATR Stops + Asset-Class R:R + R-Multiple P&L (April 22 2026)
-
-**Problem:** First 4 days of live P&L data showed −€300 net across 18 trades, but the loss was entirely from IG indices (0/10 win rate on DAX/FTSE/S&P — every trade stopped out at −0.25%). SOL ran 5/8 wins but every win was a 24h auto-close at +2–3% because (a) the 3:1 TP at a 1% stop was unreachable in 24h, and (b) `finestExitTimeframe` queried `5m` crypto candles which were never actually polled, so intraday TP/SL detection never fired. Meanwhile the P&L report's `Est €` column was scoring those +2.8% auto-closes as fixed-€ losses, grossly understating SOL performance.
-
-**Solution (4 parts):**
-
-| Change | Where | Effect |
-|--------|-------|--------|
-| ATR(14) × multiplier stops | `AtrCalculator`, `PositionOutcomeService.computeStopPoints` | Stop width adapts to current 15m volatility (1.5× trend, 2.0× non-trend). Falls back to fixed-pct when <15 candles available. Toggle: `rsi.demo.atr-stops-enabled`. |
-| Trend R:R split by asset class | `rsi.demo.trend-rr-{crypto,index,commodity}` | Crypto 2:1 (was 3:1 and unreachable); indices/commodities still 3:1. |
-| Crypto exit TF aligned to populated data | `PositionOutcomeService.finestExitTimeframe` | Unified to `15m` across all asset classes (5m was never polled for crypto under current config; caused every crypto position to 24h-auto-close). |
-| R-multiple € estimation in report | `PositionReportService.estEur` | `€ = (pnlPct / stopPctAtEntry) × riskEur`. Fixes 24h auto-closes being counted as fixed losses. Unrealized P&L + →TP/SL % columns added to Open Positions table. |
-
-**Result:** The −€300 net was a reporting artifact on top of one fixable structural issue (unreachable crypto TP). With the fixes in, SOL performance tells the true story and IG stops react to volatility instead of triggering on noise.
-
----
-
-## Prioritised Backlog
-
-> Timelines assume part-time development (~2–4 hrs/week). P1 = do soon, P2 = next sprint, P3 = future.
-
-### 🔴 P1 — High Value, Do Soon (this week / next 2 weeks)
+### P1 — Do next (1–2 weeks)
 
 | Item | Effort | Notes |
 |------|--------|-------|
-| **✅ Duplicate position guard** | **COMPLETE** | `PositionOutcomeService.handleSignalEvent()` skips creating a new `PositionOutcome` if an open position already exists for the same symbol. Prevents report overcounting. Mirrors real-world single-position-per-instrument constraint. |
-| **✅ Candle History Persistence (DB)** | **COMPLETE** | `CandleHistory` entity persists to PostgreSQL, 2,885+ candles loaded on startup, RSI accuracy maintained across restarts. |
-| **✅ P&L Report — EUR totals + CSV endpoint** | **COMPLETE** | `PositionReportService` now shows Risk/trade, Gross wins, Gross losses, Net P&L in EUR. By Instrument breakdown added. New endpoint: `GET /api/positions/pnl-report/csv`. Makefile: `make remote-report` / `make remote-csv`. |
-| **RSI-bucket outcome analysis** (data task) | ~1h SQL | Run once ≥2 weeks of `position_outcomes` data exists (seeded Apr 18). Join `signal_logs` + `position_outcomes` to split TREND_BUY_DIP wins/losses by rsi15m bucket (<35, 35–45, 45–50, 50–55, 55–60). If <50 fires show materially higher win rate, lower `TREND_DIP_RSI_THRESHOLD` from 60 → 50 (config-only). BTC re-enabled Apr 21 to accelerate data collection. Query: `SELECT CASE WHEN s.rsi15m < 35 THEN '<35' WHEN s.rsi15m < 45 THEN '35-45' WHEN s.rsi15m < 50 THEN '45-50' WHEN s.rsi15m < 55 THEN '50-55' ELSE '55-60' END as bucket, COUNT(*) as n, SUM(CASE WHEN p.outcome = 'TP_HIT' THEN 1 ELSE 0 END) as tp, SUM(CASE WHEN p.outcome = 'SL_HIT' THEN 1 ELSE 0 END) as sl FROM signal_logs s JOIN position_outcomes p ON p.signal_log_id = s.id WHERE s.signal_type = 'TREND_BUY_DIP' GROUP BY 1 ORDER BY 1;` |
-| **Telegram Bot Commands** | ~3h | Manage the service via Telegram messages instead of curl/API. Commands: `/position BTCUSDT` (set active position → enables anomaly monitoring), `/close` (clear position → disables anomaly monitoring), `/status` (show position, no-trade mode, muted symbols), `/mute BTCUSDT` / `/unmute BTCUSDT`, `/notrade on` / `/notrade off`. Requires a Telegram webhook or polling listener (`TelegramCommandService`) that parses incoming messages and calls `AppSettingsService`. Admin-only — restrict to known chat IDs. |
-| **Momentum Fading Detector** | ~2h | Notify "FAST TF DIVERGENCE — consider taking profit" when 3/3 aligned but fast TFs (1m–15m) flip opposite. No new API calls. Uses existing RSI values. Exit timing signal — replaces manual chart check. |
-| **✅ Deploy to AWS** | **COMPLETE** | Live on `108.128.230.238` (eu-west-1). 5 instruments active. See `docs/remote-deployment.md`. |
-| **Enable Claude AI enrichment** | ~30min | Add `CLAUDE_API_KEY` env var — service already built. ~$5/month at current signal frequency. |
+| **RSI-bucket outcome analysis** | ~1h SQL | Once ≥2 weeks of `position_outcomes` exist, split TREND_BUY_DIP wins/losses by rsi15m bucket. If <50 fires win materially more, drop `TREND_DIP_RSI_THRESHOLD` 60 → 50. Query in `project-log.md`. |
+| **Enable Claude AI enrichment** | ~30min | Set `CLAUDE_API_KEY` + `CLAUDE_ENABLED=true`. Service already built. |
+| **Telegram bot commands** | ~3h | `/position`, `/close`, `/status`, `/mute`, `/notrade` — manage service via Telegram. Admin-only via chat-id allowlist. |
+| **Momentum fading detector** | ~2h | Notify "FAST TF DIVERGENCE" when 3/3 aligned but fast TFs flip. Exit-timing signal using existing RSI values. |
 
-### 🟡 P2 — High Value, Medium Effort (2–4 weeks)
+### P2 — Next sprint (2–4 weeks)
 
 | Item | Effort | Notes |
 |------|--------|-------|
-| **Volatility-spike entry filter** | ~1h | `AtrCalculator.atrExpansionRatio` is already built. Wire into `SignalDetectionService` to skip signals when current 15m ATR > 1.5× its 20-period average — avoids entering during news-driven whipsaw. Gated by new `rsi.demo.atr-spike-filter-enabled` flag. |
-| **Volume confirmation for crypto dips** | ~2h | Require the entry candle's volume > N× the 20-period mean before firing a TREND_BUY_DIP on crypto. Tighter crypto filter; indices don't need it (IG volume data is unreliable). Config: `rsi.demo.volume-confirmation-threshold`. |
-| **ATR-stops A/B tracking** | ~1h | Persist `stop_basis` (`ATR_1.5` / `FIXED_0.5`) on `PositionOutcome` so `PositionReportService` can group win-rate and expectancy by stop source. Required before deciding whether to leave ATR permanently on or per-asset-class. |
-| **Price Momentum Surge Detector** | ~4h | Detects rapid price moves (>0.5% in 15min or >1% in 1h) *before* RSI aligns. Require simultaneous surge across 2+ indices (e.g. S&P + DAX) to filter noise. Bidirectional. Catches institutional flow / news leaks like the April 7 pre-announcement buying. Uses existing candle data — no new API calls. |
-| **Stochastic Confirmation Layer** | ~3h | Add %K (14,3,3) as optional confirmation on RSI signals. Computable from existing OHLC data. See `PROJECT_LOG.md` for proposed logic. |
-| **Self-Service Telegram Onboarding** | ~3h | New users message bot `/start` → admin gets DM *"@username (987654321) requests alerts — /approve 987654321 /reject 987654321"*. Approved IDs hot-reloaded into `TELEGRAM_CHAT_IDS` without restart. Store `PendingSubscriber` in DB with approval audit trail. Eliminates manual `curl getUpdates` step. |
+| **Volatility-spike entry filter** | ~1h | `AtrCalculator.atrExpansionRatio` already built; wire into `SignalDetectionService` to skip signals when 15m ATR > 1.5× its 20-period mean. Flag: `rsi.demo.atr-spike-filter-enabled`. |
+| **Volume confirmation for crypto dips** | ~2h | Require entry-candle volume > N× 20-period mean for crypto TREND_BUY_DIP. IG volume unreliable so indices unaffected. |
+| **ATR-stops A/B tracking** | ~1h | Persist `stop_basis` on `PositionOutcome`; group expectancy by stop source in the report. Drives the decision to leave ATR on permanently. |
+| **Price momentum surge detector** | ~4h | Detect >0.5%/15min or >1%/1h moves *before* RSI aligns. Require 2+ simultaneous indices to filter noise. |
+| **Stochastic confirmation layer** | ~3h | Optional %K(14,3,3) confirmation on RSI signals. Proposed logic in `project-log.md`. |
+| **Self-service Telegram onboarding** | ~3h | `/start` → admin DM `/approve <id>`; hot-reload approved IDs into `TELEGRAM_CHAT_IDS`. |
 
-### 🟢 P3 — Lower Priority / Speculative (1–3 months)
+### P3 — Speculative (1–3 months)
 
 | Item | Effort | Notes |
 |------|--------|-------|
-| **Restore 5m granularity for crypto exits** | ~1h | If 15m exit candles ever miss wick-based TP/SL on fast SOL moves, add `5m` to SOL's `timeframes` in `application.yml` so 5m candles persist to `candle_history`, then revert `PositionOutcomeService.finestExitTimeframe` to the original `5m`/`15m` split. Deferred: Binance is free so no API-cost concern, but adds a 5m RSI series that would affect signal alignment counts — review signal logic first. |
-| **Cross-instrument Correlation Detector** | ~6h | Flag when 3+ indices align simultaneously (e.g. DAX + FTSE + S&P all oversold) — stronger signal. Part of Phase 5 spec. |
-| **High Uncertainty Mode Toggle** | ~2h | Suppress all signals except urgent full-alignment when VIX-equivalent is elevated. Part of Phase 5 spec. |
-| **Phase 4 Auto-Trading (enable)** | weeks | Hard-disabled. Requires 3+ months paper trading first. Do not rush. |
+| **Restore 5m crypto exit granularity** | ~1h | If 15m ever misses SOL wicks, add `5m` to SOL `timeframes` and revert `finestExitTimeframe` to the original 5m/15m split. Affects signal alignment counts — review first. |
+| **Cross-instrument correlation detector** | ~6h | Fire when 3+ indices align together (DAX + FTSE + S&P all oversold). Part of Phase 5 spec. |
+| **High Uncertainty Mode toggle** | ~2h | Suppress all but urgent full-alignment signals during elevated VIX-equivalent. Part of Phase 5 spec. |
+| **Phase 4 auto-trading (enable)** | weeks | Only after 3+ months of positive paper P&L. Do not rush. |
 
 ---
 
 ## Immediate Next Actions
 
-1. ✅ App is running — `make logs` (local) · `make remote-logs` (AWS EC2) · `make ship` (deploy + watch)
-2. **Paper trade** — log every signal manually for 4–8 weeks before trusting Phase 4
-3. **Deploy to AWS** — for 24/7 uptime. See `docs/remote-deployment.md`.
-4. **Add `CLAUDE_API_KEY`** — quick win for richer Telegram messages
-
----
-
-## Migration Notes
-
-- **ntfy.sh → Telegram (April 2026)** — Notifications migrated from public ntfy.sh topic (`https://ntfy.sh/rsi-alerts`) to private Telegram bot (@LucidLynx1_bot). ntfy code removed in full; Telegram is the sole channel. To add recipients see README §4. Original ntfy topic is now dead — messages expired, no longer published to.
+1. **Watch the deploy** — `make ship` then `make remote-report` to confirm Open Positions render at the top with correct unrealized P&L and the `Realistic Net` row appears in Summary.
+2. **Paper trade only** — do not enable Phase 4 auto-exec.
+3. **Run `make candles-backup-remote` weekly** — local CSV backup in `reports/candles/` (retain until you've validated the DB backup story).
+4. **Add `CLAUDE_API_KEY`** when you want richer Telegram context.
 
 ---
 
 ## Notes
 
-**On renaming from "RSI Alert Service":** ✅ Done — repo and local directory renamed to `market-signals` (April 2026).
-
-**On Claude vs. alternative AI models:** Claude Haiku (~$5/month at current frequency) is the current choice. Alternatives worth evaluating:
-- **Gemini Flash (Google)** — cheaper than Haiku, comparable quality for structured tasks, free tier available
-- **DeepSeek-R1 / V3** — significantly cheaper, strong reasoning, hosted API available (or self-host via Ollama locally for zero cost)
-- **GPT-4o-mini (OpenAI)** — competitive pricing, well-documented
-- **Windsurf/Copilot** — IDE-only tools, not suitable for server-side enrichment
-- The `ClaudeEnrichmentService` is the only class to change — all others call it via interface. Swapping models is low-effort once a provider is chosen.
+- **Data sources**: Binance (FREE, crypto) and IG (FREE with account, indices/FX/commodities/crypto). Finnhub and Twelve Data rejected — free tiers insufficient for indices coverage and rate limits.
+- **Hosting**: AWS EC2 t3.micro (eu-west-1, Free Tier 12 months). Postgres self-hosted in the same Docker Compose. No RDS.
+- **AI model swap**: `ClaudeEnrichmentService` is the only file to change. Gemini Flash / DeepSeek / GPT-4o-mini all cheaper than Haiku; swap when ready.
 
 *Private Use — Not for Distribution*

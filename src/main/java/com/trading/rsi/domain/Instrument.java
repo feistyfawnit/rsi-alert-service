@@ -54,6 +54,16 @@ public class Instrument {
     @Column(name = "trend_buy_dip_enabled")
     private Boolean trendBuyDipEnabled = true;
 
+    /**
+     * When false, TREND_BUY_DIP signals are still recorded (SignalLog + PositionOutcome)
+     * but the Telegram notification is suppressed. Lets us collect forward P&L data on
+     * an instrument whose trend performance we're unsure about without alert noise.
+     * Independent of `trendBuyDipEnabled` (which suppresses detection entirely).
+     */
+    @Builder.Default
+    @Column(name = "trend_buy_dip_notify")
+    private Boolean trendBuyDipNotify = true;
+
     @Column(name = "market_close_utc")
     private Integer marketCloseUtc;
     

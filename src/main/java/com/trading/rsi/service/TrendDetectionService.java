@@ -301,6 +301,7 @@ public class TrendDetectionService {
                     BigDecimal strength = BigDecimal.valueOf(dipRsiThreshold - fastRsi)
                             .setScale(4, RoundingMode.HALF_UP);
 
+                    boolean silent = Boolean.FALSE.equals(instrument.getTrendBuyDipNotify());
                     RsiSignal signal = RsiSignal.builder()
                             .symbol(instrument.getSymbol())
                             .instrumentName(instrument.getName())
@@ -311,9 +312,11 @@ public class TrendDetectionService {
                             .totalTimeframes(rsiValues.size())
                             .signalStrength(strength)
                             .triggerCandle(triggerCandle)
+                            .silent(silent)
                             .build();
 
-                    log.info("TREND_BUY_DIP: {} RSI={} pulled back below {} in uptrend — price {} EMA{}({})",
+                    log.info("TREND_BUY_DIP{}: {} RSI={} pulled back below {} in uptrend — price {} EMA{}({})",
+                            silent ? " [SILENT]" : "",
                             instrument.getName(), String.format("%.1f", fastRsi), dipRsiThreshold,
                             currentPrice, emaPeriod, emaTrendTimeframe);
                     eventPublisher.publishEvent(new SignalEvent(this, signal));

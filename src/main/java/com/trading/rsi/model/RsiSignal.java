@@ -24,4 +24,10 @@ public class RsiSignal {
     private BigDecimal signalStrength;
     private Candle triggerCandle;
     private Map<String, StochasticResult> stochasticValues;
+    /**
+     * If true, the signal is recorded (SignalLog + PositionOutcome) but NO Telegram
+     * notification is sent. Used for silent P&L tracking of per-instrument signal
+     * types the user wants to evaluate without live alerts.
+     */
+    private boolean silent;
 }

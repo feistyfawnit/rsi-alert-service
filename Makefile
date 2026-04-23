@@ -1,4 +1,4 @@
-.PHONY: up down logs test test-anomaly ps clean pnl-report remote-report remote-csv remote-append remote-logs remote-logs-tail remote-health pull-reports ship deploy
+.PHONY: up down logs test test-anomaly ps clean pnl-report remote-report remote-csv remote-append remote-logs remote-logs-tail remote-health pull-reports ship deploy candles-backup-local candles-backup-remote
 
 EC2_IP  := 108.128.230.238
 SSH_KEY := $(HOME)/.ssh/market-signals.pem
@@ -84,3 +84,22 @@ pull-reports:
 	@echo "📥 Pulling reports from EC2 ($(EC2_IP)) → ./reports/ ..."
 	@scp -i $(SSH_KEY) -r ubuntu@$(EC2_IP):$(APP_DIR)/reports/* reports/ 2>/dev/null || true
 	@echo "✅ Reports synced locally."
+
+# Dump candle_history from local Postgres to CSV (one file per symbol+timeframe combo).
+candles-backup-local:
+	@mkdir -p reports/candles
+	@echo "📥 Exporting local candle_history → reports/candles/candles-$$(date -u +%Y%m%d).csv ..."
+	@docker exec market-signals-postgres psql -U postgres -d market_signals -c \
+		"\copy (SELECT symbol, timeframe, candle_time, open, high, low, close, volume FROM candle_history ORDER BY symbol, timeframe, candle_time) TO STDOUT WITH CSV HEADER" \
+		> reports/candles/candles-$$(date -u +%Y%m%d).csv
+	@wc -l reports/candles/candles-$$(date -u +%Y%m%d).csv
+	@echo "✅ Local candle backup written."
+
+# Dump candle_history from remote EC2 Postgres to local CSV. Safe to run daily.
+candles-backup-remote:
+	@mkdir -p reports/candles
+	@echo "📥 Exporting EC2 candle_history → reports/candles/candles-ec2-$$(date -u +%Y%m%d).csv ..."
+	@$(SSH) "docker exec market-signals-postgres psql -U postgres -d market_signals -c \"\\copy (SELECT symbol, timeframe, candle_time, open, high, low, close, volume FROM candle_history ORDER BY symbol, timeframe, candle_time) TO STDOUT WITH CSV HEADER\"" \
+		> reports/candles/candles-ec2-$$(date -u +%Y%m%d).csv
+	@wc -l reports/candles/candles-ec2-$$(date -u +%Y%m%d).csv
+	@echo "✅ Remote candle backup written."

@@ -12,6 +12,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -72,6 +74,19 @@ public class PositionReportService {
 
         md.append("# P&L Report\n\n");
         md.append("*Auto-generated: ").append(now).append("*\n\n");
+        double riskEur = demoAccountBalance * demoRiskPercent / 100.0;
+
+        // ── Open Positions (at top, same format as closed) ──
+        if (!open.isEmpty()) {
+            md.append("## Open Positions (").append(open.size()).append(")\n\n");
+            md.append("| Entry Time (UTC) | Exit Time (UTC) | Symbol | Dir | Signal | P&L% | Est € | Result | Held |\n");
+            md.append("|------------------|-----------------|--------|-----|--------|------|-------|--------|------|\n");
+            Instant nowI = Instant.now();
+            open.stream()
+                    .sorted(Comparator.comparing(PositionOutcome::getEntryTime).reversed())
+                    .forEach(p -> md.append(formatOpenRow(p, riskEur, nowI)));
+            md.append("\n");
+        }
 
         // ── Summary ──
         md.append("## Summary\n\n");
@@ -85,7 +100,6 @@ public class PositionReportService {
             long slHits = closed.stream().filter(p -> Boolean.TRUE.equals(p.getSlHit())).count();
             double avgPnl = closed.stream().mapToDouble(p -> p.getPnlPct().doubleValue()).average().orElse(0);
             double winRate = (double) wins / closed.size() * 100;
-            double riskEur = demoAccountBalance * demoRiskPercent / 100.0;
 
             // R-multiple based € estimate: 24h auto-closes at +2R count as +2R, not a fixed win/loss.
             double eurWins = closed.stream()
@@ -93,6 +107,19 @@ public class PositionReportService {
             double eurLosses = closed.stream()
                     .mapToDouble(p -> Math.min(0, estEur(p, riskEur))).sum();
             double netEur = eurWins + eurLosses;
+
+            // Realistic Net — excludes (symbol, signalType) groups with ≥3 trades AND zero TP hits.
+            // Proven-loser configs auto-drop; once a config hits a TP it rejoins the total.
+            java.util.Set<String> badConfigs = closed.stream()
+                    .collect(Collectors.groupingBy(p -> p.getSymbol() + "|" + p.getSignalType().name()))
+                    .entrySet().stream()
+                    .filter(e -> e.getValue().size() >= 3
+                            && e.getValue().stream().noneMatch(p -> Boolean.TRUE.equals(p.getTpHit())))
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toSet());
+            double realisticNet = closed.stream()
+                    .filter(p -> !badConfigs.contains(p.getSymbol() + "|" + p.getSignalType().name()))
+                    .mapToDouble(p -> estEur(p, riskEur)).sum();
 
             md.append("| Win rate | **").append(String.format("%.0f%%", winRate))
               .append("** (").append(wins).append("/").append(closed.size()).append(") |\n");
@@ -104,6 +131,12 @@ public class PositionReportService {
             md.append("| Gross wins (R-weighted) | **+€").append(String.format("%.0f", eurWins)).append("** |\n");
             md.append("| Gross losses | **€").append(String.format("%.0f", eurLosses)).append("** |\n");
             md.append("| **Net P&L (est.)** | **").append(netEur >= 0 ? "+" : "").append(String.format("€%.0f", netEur)).append("** |\n");
+            md.append("| **Realistic Net** (excl. 0-win configs) | **")
+              .append(realisticNet >= 0 ? "+" : "").append(String.format("€%.0f", realisticNet)).append("** |\n");
+            if (!badConfigs.isEmpty()) {
+                md.append("| *Excluded configs* | *")
+                  .append(String.join(", ", badConfigs)).append("* |\n");
+            }
         } else {
             md.append("\n*No closed positions yet — results appear after signals fire and 24h elapses.*\n");
         }
@@ -160,73 +193,6 @@ public class PositionReportService {
                           .append(" | ").append(tp)
                           .append(" | ").append(sl)
                           .append(" | ").append(verdict)
-                          .append(" |\n");
-                    });
-        }
-
-        // ── Open Positions (with live unrealized P&L) ──
-        if (!open.isEmpty()) {
-            md.append("\n## Open Positions\n\n");
-            md.append("| Entry Time (UTC) | Symbol | Dir | Signal | Entry | Now | Unreal % | Est € | →TP % | →SL % | TP | SL | Trend | RSI f·m·s |\n");
-            md.append("|------------------|--------|-----|--------|-------|-----|----------|-------|-------|-------|----|----|-------|-----------|\n");
-            double riskEurOpen = demoAccountBalance * demoRiskPercent / 100.0;
-            open.stream()
-                    .sorted(Comparator.comparing(PositionOutcome::getEntryTime).reversed())
-                    .forEach(p -> {
-                        String dir = Boolean.TRUE.equals(p.getIsLong()) ? "▲" : "▼";
-                        String trend = p.getTrendState() != null ? switch (p.getTrendState()) {
-                            case "STRONG_UPTREND" -> "📈BULL";
-                            case "STRONG_DOWNTREND" -> "📉BEAR";
-                            default -> "—";
-                        } : "—";
-                        String rsi = (p.getRsiFast() != null)
-                                ? String.format("%.0f·%.0f·%.0f",
-                                    p.getRsiFast().doubleValue(),
-                                    p.getRsiMid() != null ? p.getRsiMid().doubleValue() : 0,
-                                    p.getRsiSlow() != null ? p.getRsiSlow().doubleValue() : 0)
-                                : "—";
-
-                        BigDecimal now2 = priceHistoryService.getLatestPrice(p.getSymbol());
-                        String nowStr = now2 != null ? now2.toPlainString() : "—";
-                        String unrealPctStr = "—";
-                        String estEurStr = "—";
-                        String toTpStr = "—";
-                        String toSlStr = "—";
-                        if (now2 != null) {
-                            double entry = p.getEntryPrice().doubleValue();
-                            double cur   = now2.doubleValue();
-                            double unrealPct = (Boolean.TRUE.equals(p.getIsLong())
-                                    ? (cur - entry) / entry
-                                    : (entry - cur) / entry) * 100.0;
-                            unrealPctStr = String.format("%+.2f%%", unrealPct);
-
-                            double stopPctAtEntry = Math.abs(entry - p.getSlPrice().doubleValue()) / entry * 100.0;
-                            if (stopPctAtEntry > 0) {
-                                double r = unrealPct / stopPctAtEntry;
-                                double eur = r * riskEurOpen;
-                                estEurStr = (eur >= 0 ? "+" : "") + String.format("€%.0f", eur);
-                            }
-
-                            double tpDist = Math.abs(p.getTpPrice().doubleValue() - cur) / cur * 100.0;
-                            double slDist = Math.abs(p.getSlPrice().doubleValue() - cur) / cur * 100.0;
-                            toTpStr = String.format("%.2f%%", tpDist);
-                            toSlStr = String.format("%.2f%%", slDist);
-                        }
-
-                        md.append("| ").append(p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT))
-                          .append(" | ").append(p.getSymbol())
-                          .append(" | ").append(dir)
-                          .append(" | ").append(p.getSignalType())
-                          .append(" | ").append(p.getEntryPrice().toPlainString())
-                          .append(" | ").append(nowStr)
-                          .append(" | ").append(unrealPctStr)
-                          .append(" | ").append(estEurStr)
-                          .append(" | ").append(toTpStr)
-                          .append(" | ").append(toSlStr)
-                          .append(" | ").append(p.getTpPrice().toPlainString())
-                          .append(" | ").append(p.getSlPrice().toPlainString())
-                          .append(" | ").append(trend)
-                          .append(" | ").append(rsi)
                           .append(" |\n");
                     });
         }
@@ -353,6 +319,43 @@ public class PositionReportService {
                .append("\n");
         }
         return csv.toString();
+    }
+
+    /**
+     * Format an open position as a markdown row aligned with the closed-position table.
+     * P&L% = unrealized (current vs entry), Est € = R-multiple, Result = "OPEN", Exit = "—".
+     */
+    private String formatOpenRow(PositionOutcome p, double riskEur, Instant nowI) {
+        String dir = Boolean.TRUE.equals(p.getIsLong()) ? "▲" : "▼";
+        BigDecimal cur = priceHistoryService.getLatestPrice(p.getSymbol());
+        String pnlPctStr = "—";
+        String estEurStr = "—";
+        if (cur != null && p.getEntryPrice() != null) {
+            double entry = p.getEntryPrice().doubleValue();
+            double curD = cur.doubleValue();
+            double unrealPct = (Boolean.TRUE.equals(p.getIsLong())
+                    ? (curD - entry) / entry
+                    : (entry - curD) / entry) * 100.0;
+            pnlPctStr = String.format("%+.2f%%", unrealPct);
+            if (p.getSlPrice() != null) {
+                double stopPct = Math.abs(entry - p.getSlPrice().doubleValue()) / entry * 100.0;
+                if (stopPct > 0) {
+                    double eur = (unrealPct / stopPct) * riskEur;
+                    estEurStr = (eur >= 0 ? "+" : "") + String.format("€%.0f", eur);
+                }
+            }
+        }
+        double heldHours = Duration.between(p.getEntryTime(), nowI).toMinutes() / 60.0;
+        return "| " + p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT)
+                + " | — "
+                + " | " + p.getSymbol()
+                + " | " + dir
+                + " | " + p.getSignalType()
+                + " | " + pnlPctStr
+                + " | " + estEurStr
+                + " | OPEN"
+                + " | " + String.format("%.1fh", heldHours)
+                + " |\n";
     }
 
     /**
