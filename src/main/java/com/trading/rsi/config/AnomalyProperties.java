@@ -14,7 +14,17 @@ public class AnomalyProperties {
 
     private boolean enabled = true;
     private VolumeSpikeConfig volumeSpike = new VolumeSpikeConfig();
+    private CorrelationConfig correlation = new CorrelationConfig();
     private PolymarketConfig polymarket = new PolymarketConfig();
+
+    public enum NotifyScope {
+        /** Alert for every symbol (legacy behaviour). */
+        ALL,
+        /** Alert only when an active position exists OR a signal fired recently on this symbol. */
+        RELEVANT,
+        /** Alert only when an active position exists on this symbol. */
+        OPEN_ONLY
+    }
 
     @Data
     public static class VolumeSpikeConfig {
@@ -24,6 +34,22 @@ public class AnomalyProperties {
         private int minPeriodsBeforeAlert = 10;
         private int cooldownMinutes = 30;
         private double minBaselineVolume = 50.0;
+        /** Telegram notification gate — does NOT affect DB logging. */
+        private NotifyScope notifyScope = NotifyScope.ALL;
+        /** For `RELEVANT` scope: how far back to look for a signal on the same symbol. */
+        private int notifyRecentSignalHours = 4;
+    }
+
+    /**
+     * Correlation burst: when many symbols fire anomalies simultaneously it is almost
+     * always a macro / news event. Collapse into one CROSS_CORRELATION alert instead of
+     * spamming N individual alerts.
+     */
+    @Data
+    public static class CorrelationConfig {
+        private boolean enabled = true;
+        private int minInstruments = 3;
+        private int windowSeconds = 60;
     }
 
     @Data

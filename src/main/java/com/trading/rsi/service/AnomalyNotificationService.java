@@ -1,5 +1,6 @@
 package com.trading.rsi.service;
 
+import com.trading.rsi.config.AnomalyProperties;
 import com.trading.rsi.domain.AnomalyLog;
 import com.trading.rsi.domain.SignalLog;
 import com.trading.rsi.event.AnomalyEvent;
@@ -9,6 +10,7 @@ import com.trading.rsi.repository.SignalLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -29,6 +33,8 @@ public class AnomalyNotificationService {
     private final TelegramNotificationService telegramNotificationService;
     private final SignalLogRepository signalLogRepository;
     private final AnomalyLogRepository anomalyLogRepository;
+    private final AnomalyProperties anomalyProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${rsi.quiet-hours.enabled:true}")
     private boolean quietHoursEnabled;
@@ -45,19 +51,98 @@ public class AnomalyNotificationService {
         AnomalyAlert alert = event.getAlert();
 
         Object symbolObj = alert.getDetails() != null ? alert.getDetails().get("symbol") : null;
+        String symbol = symbolObj instanceof String s ? s : null;
         anomalyLogRepository.save(AnomalyLog.builder()
                 .type(alert.getType())
                 .severity(alert.getSeverity())
-                .symbol(symbolObj instanceof String s ? s : null)
+                .symbol(symbol)
                 .description(alert.getDescription())
                 .detectedAt(alert.getDetectedAt())
                 .build());
 
+        // 1. Correlation burst collapse — if this individual alert is part of a
+        //    multi-symbol burst, emit one CROSS_CORRELATION and suppress individuals.
+        //    Applies to VOLUME_SPIKE only (Polymarket / correlation don't self-loop).
+        if (alert.getType() == AnomalyAlert.AnomalyType.VOLUME_SPIKE
+                && maybeEmitCorrelationBurst(alert, symbol)) {
+            log.info("Suppressed individual anomaly for {} — part of correlation burst", symbol);
+            return;
+        }
+
+        // 2. Notify-scope gate — only Telegram is filtered; DB log is unaffected.
+        if (!shouldNotify(alert, symbol)) {
+            log.debug("Notify-scope {} — suppressing {} anomaly for {} (not relevant)",
+                    anomalyProperties.getVolumeSpike().getNotifyScope(), alert.getSeverity(), symbol);
+            return;
+        }
+
+        // 3. Quiet hours — CRITICAL always bypasses.
         if (alert.getSeverity() != AnomalyAlert.Severity.CRITICAL && isQuietHours()) {
             log.debug("Quiet hours — suppressing {} anomaly alert for {}", alert.getSeverity(), alert.getMarket());
             return;
         }
         sendUrgentAlert(alert);
+    }
+
+    /**
+     * Notify-scope gate. Only affects Telegram push; the alert is always stored in
+     * anomaly_log. Also always notifies for CROSS_CORRELATION (system-level) regardless
+     * of the symbol-level scope.
+     */
+    private boolean shouldNotify(AnomalyAlert alert, String symbol) {
+        if (alert.getType() == AnomalyAlert.AnomalyType.CROSS_CORRELATION) return true;
+        if (alert.getType() == AnomalyAlert.AnomalyType.POLYMARKET_ODDS_SHIFT) return true;
+        AnomalyProperties.NotifyScope scope = anomalyProperties.getVolumeSpike().getNotifyScope();
+        if (scope == null || scope == AnomalyProperties.NotifyScope.ALL) return true;
+        if (symbol == null) return true;  // can't filter without a symbol — fail open.
+
+        boolean hasPosition = hasOpenPositionFor(alert);
+        if (scope == AnomalyProperties.NotifyScope.OPEN_ONLY) return hasPosition;
+        if (scope == AnomalyProperties.NotifyScope.RELEVANT) {
+            if (hasPosition) return true;
+            int hours = anomalyProperties.getVolumeSpike().getNotifyRecentSignalHours();
+            return signalLogRepository.findFirstBySymbolAndCreatedAtAfterOrderByCreatedAtDesc(
+                    symbol, LocalDateTime.now().minusHours(hours)).isPresent();
+        }
+        return true;
+    }
+
+    /**
+     * Correlation burst detector. If ≥ minInstruments distinct symbols have fired anomalies
+     * within windowSeconds AND we haven't already emitted a CROSS_CORRELATION for this
+     * window, emit one and return true so the caller suppresses the individual alert.
+     * Returns true only when THIS alert is the one that triggered (or is part of) a live
+     * burst — so all subsequent individuals in the same burst get suppressed.
+     */
+    private boolean maybeEmitCorrelationBurst(AnomalyAlert alert, String symbol) {
+        AnomalyProperties.CorrelationConfig cfg = anomalyProperties.getCorrelation();
+        if (cfg == null || !cfg.isEnabled()) return false;
+        if (symbol == null) return false;
+
+        Instant since = Instant.now().minusSeconds(cfg.getWindowSeconds());
+        List<String> distinct = anomalyLogRepository.findDistinctSymbolsSince(since);
+        if (distinct.size() < cfg.getMinInstruments()) return false;
+
+        boolean alreadyEmitted = anomalyLogRepository.existsCorrelationSince(since);
+        if (!alreadyEmitted) {
+            AnomalyAlert correlation = AnomalyAlert.builder()
+                    .type(AnomalyAlert.AnomalyType.CROSS_CORRELATION)
+                    .severity(AnomalyAlert.Severity.CRITICAL)
+                    .market(String.format("%d instruments in %ds", distinct.size(), cfg.getWindowSeconds()))
+                    .description(String.format(
+                            "Systemic event — %d symbols firing simultaneously: %s. Likely macro / news. Individual anomaly alerts suppressed.",
+                            distinct.size(), String.join(", ", distinct)))
+                    .detectedAt(Instant.now())
+                    .details(Map.of(
+                            "symbols", distinct,
+                            "windowSeconds", cfg.getWindowSeconds()
+                    ))
+                    .build();
+            log.warn("CROSS_CORRELATION burst: {} symbols in {}s — {}",
+                    distinct.size(), cfg.getWindowSeconds(), distinct);
+            eventPublisher.publishEvent(new AnomalyEvent(this, correlation));
+        }
+        return true;
     }
 
     /**

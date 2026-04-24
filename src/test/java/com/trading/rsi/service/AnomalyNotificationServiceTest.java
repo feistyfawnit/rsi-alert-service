@@ -1,5 +1,6 @@
 package com.trading.rsi.service;
 
+import com.trading.rsi.config.AnomalyProperties;
 import com.trading.rsi.event.AnomalyEvent;
 import com.trading.rsi.model.AnomalyAlert;
 import com.trading.rsi.repository.AnomalyLogRepository;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
@@ -34,12 +36,26 @@ class AnomalyNotificationServiceTest {
     @Mock
     private AnomalyLogRepository anomalyLogRepository;
 
+    @Mock
+    private AnomalyProperties anomalyProperties;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private AnomalyNotificationService notificationService;
 
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(notificationService, "quietHoursEnabled", false);
+        // Correlation burst disabled in unit tests — we test individual alerts.
+        AnomalyProperties.CorrelationConfig corr = new AnomalyProperties.CorrelationConfig();
+        corr.setEnabled(false);
+        lenient().when(anomalyProperties.getCorrelation()).thenReturn(corr);
+        // Notify-scope ALL so we test the other gating logic without scope filtering.
+        AnomalyProperties.VolumeSpikeConfig vs = new AnomalyProperties.VolumeSpikeConfig();
+        vs.setNotifyScope(AnomalyProperties.NotifyScope.ALL);
+        lenient().when(anomalyProperties.getVolumeSpike()).thenReturn(vs);
     }
 
     @Test

@@ -76,8 +76,12 @@ public class VolumeAnomalyDetector {
         if (zScore >= cfg.getStdDevThreshold()) {
             Instant now = Instant.now();
             Instant cooldownBoundary = now.minus(cfg.getCooldownMinutes(), ChronoUnit.MINUTES);
+            // Apr 24 2026: dedupe cooldown key changed from `symbol:timeframe` to just `symbol`.
+            // A single news event closes candles on 15m and 30m within seconds of each other;
+            // under the old key both fired independently. Now the higher-σ TF wins and the
+            // others are suppressed for `cooldownMinutes`. Baseline history remains per-TF.
             boolean[] claimed = {false};
-            lastAlertTime.compute(key, (k, prev) -> {
+            lastAlertTime.compute(symbol, (k, prev) -> {
                 if (prev == null || prev.isBefore(cooldownBoundary)) {
                     claimed[0] = true;
                     return now;

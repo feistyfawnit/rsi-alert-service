@@ -50,6 +50,7 @@ public class TrendDetectionService {
     private final SignalCooldownService cooldownService;
     private final EmaCalculator emaCalculator;
     private final PriceHistoryService priceHistoryService;
+    private final AdxCalculator adxCalculator;
 
     @Value("${rsi.trend.ema-period:20}")
     private int emaPeriod;
@@ -74,6 +75,15 @@ public class TrendDetectionService {
 
     @Value("${rsi.trend.sell-rally-enabled:false}")
     private boolean sellRallyEnabled;
+
+    @Value("${rsi.trend.adx-filter-enabled:false}")
+    private boolean adxFilterEnabled;
+
+    @Value("${rsi.trend.adx-period:14}")
+    private int adxPeriod;
+
+    @Value("${rsi.trend.adx-threshold:20.0}")
+    private double adxThreshold;
 
     private static final int MOMENTUM_LOOKBACK = 5;
     private static final double MOMENTUM_THRESHOLD_PCT = 1.0;
@@ -270,6 +280,21 @@ public class TrendDetectionService {
         }
         TrendState trend = getTrendState(instrument.getSymbol());
         if (trend == TrendState.NEUTRAL) return;
+
+        // ADX trend-strength filter (Wilder 1978): suppresses entries during ranging markets.
+        // Schwab, Investopedia, FXNX all cite ADX < 20 as the "no-trend" cutoff.
+        // When candle history is insufficient, Optional.empty() is returned and we do NOT
+        // block the signal — better to alert than to silently skip during warmup.
+        if (adxFilterEnabled && adxThreshold > 0) {
+            Optional<BigDecimal> adx = adxCalculator.computeAdx(
+                    instrument.getSymbol(), emaTrendTimeframe, adxPeriod);
+            if (adx.isPresent() && adx.get().doubleValue() < adxThreshold) {
+                log.info("Trend entry suppressed for {} — ADX({}) on {} is {} < {} (ranging market)",
+                        instrument.getSymbol(), adxPeriod, emaTrendTimeframe,
+                        adx.get().toPlainString(), adxThreshold);
+                return;
+            }
+        }
 
         BigDecimal fastestRsi = getFastestRsi(rsiValues, instrument.getTimeframes());
         if (fastestRsi == null) return;

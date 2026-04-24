@@ -77,11 +77,21 @@ rsi:
     ema-period: ${TREND_EMA_PERIOD:20}
     ema-timeframe: ${TREND_EMA_TIMEFRAME:1h}
     consecutive-signals-for-trend: ${TREND_CONSECUTIVE_SIGNALS:2}
-    dip-rsi-threshold: ${TREND_DIP_RSI_THRESHOLD:60}
-    rally-rsi-threshold: ${TREND_RALLY_RSI_THRESHOLD:40}
+    # Apr 24 2026: lowered 60 → 45. At 60, 22 of 22 closed TREND_BUY_DIP trades missed TP
+    # because "fast-TF RSI < 60" fires at mere neutral (RSI ~55) — entries land at the
+    # top of micro-pullbacks, not real dip bottoms. 45 targets the Investopedia-cited
+    # "deep pullback in uptrend" zone. Revisit after 20+ trades.
+    dip-rsi-threshold: ${TREND_DIP_RSI_THRESHOLD:45}
+    rally-rsi-threshold: ${TREND_RALLY_RSI_THRESHOLD:55}
     trend-timeout-hours: ${TREND_TIMEOUT_HOURS:12}
     suppress-counter-trend: ${TREND_SUPPRESS_COUNTER:true}
     sell-rally-enabled: ${TREND_SELL_RALLY_ENABLED:false}
+    # ADX(14) trend-strength filter on the trend timeframe (1h). Skips TREND_BUY_DIP /
+    # TREND_SELL_RALLY when the market is ranging (Schwab/Investopedia: ADX<20 = no trend).
+    # Set enabled=false to disable; threshold=0 also effectively disables.
+    adx-filter-enabled: ${TREND_ADX_FILTER_ENABLED:true}
+    adx-period: ${TREND_ADX_PERIOD:14}
+    adx-threshold: ${TREND_ADX_THRESHOLD:20.0}
 
   timeframes:
     - 1m
@@ -143,6 +153,21 @@ anomaly:
     min-periods-before-alert: 20
     cooldown-minutes: 60
     min-baseline-volume: 200
+    # Apr 24 2026: gate Telegram anomaly alerts. Database logging (anomaly_log) is
+    # unaffected — only the Telegram push is filtered. Values:
+    #   ALL        — alert for every symbol (previous behaviour)
+    #   RELEVANT   — alert only if (a) active position on symbol, OR (b) a signal
+    #                fired on that symbol within `notify-recent-signal-hours`
+    #   OPEN_ONLY  — alert only when there's an active position on the symbol
+    notify-scope: ${ANOMALY_NOTIFY_SCOPE:RELEVANT}
+    notify-recent-signal-hours: ${ANOMALY_RECENT_SIGNAL_HOURS:4}
+  # Cross-correlation burst collapse: when N+ distinct symbols fire anomalies within
+  # a short window (macro / news event), suppress the individual alerts after the
+  # threshold is hit and emit a single CROSS_CORRELATION alert.
+  correlation:
+    enabled: ${ANOMALY_CORRELATION_ENABLED:true}
+    min-instruments: ${ANOMALY_CORRELATION_MIN_INSTRUMENTS:3}
+    window-seconds: ${ANOMALY_CORRELATION_WINDOW_SECONDS:60}
   polymarket:
     enabled: true
     poll-interval-seconds: 300

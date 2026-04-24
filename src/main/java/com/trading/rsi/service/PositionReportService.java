@@ -1,6 +1,8 @@
 package com.trading.rsi.service;
 
+import com.trading.rsi.domain.Instrument;
 import com.trading.rsi.domain.PositionOutcome;
+import com.trading.rsi.repository.InstrumentRepository;
 import com.trading.rsi.repository.PositionOutcomeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +35,7 @@ public class PositionReportService {
 
     private final PositionOutcomeRepository positionOutcomeRepository;
     private final PriceHistoryService priceHistoryService;
+    private final InstrumentRepository instrumentRepository;
 
     @Value("${pnl.report.path:./reports/pnl-report.md}")
     private String reportPath;
@@ -61,6 +64,21 @@ public class PositionReportService {
         }
     }
 
+    // Human-readable short names for display
+    private static final Map<String, String> SHORT_NAMES = Map.ofEntries(
+        Map.entry("SOLUSDT", "SOL"),
+        Map.entry("BTCUSDT", "BTC"),
+        Map.entry("ETHUSDT", "ETH"),
+        Map.entry("BCHUSDT", "BCH"),
+        Map.entry("IX.D.DAX.DAILY.IP", "DAX"),
+        Map.entry("IX.D.FTSE.DAILY.IP", "FTSE"),
+        Map.entry("IX.D.SPTRD.DAILY.IP", "S&P"),
+        Map.entry("IX.D.NASDAQ.CASH.IP", "NAS"),
+        Map.entry("CS.D.GOLD.CFD.IP", "GOLD"),
+        Map.entry("CS.D.SILVER.CFD.IP", "SILV"),
+        Map.entry("CS.D.OIL.CFD.IP", "OIL")
+    );
+
     /**
      * Generate the full markdown report (also used by API endpoint).
      */
@@ -68,6 +86,10 @@ public class PositionReportService {
         List<PositionOutcome> all = positionOutcomeRepository.findAll();
         List<PositionOutcome> open = all.stream().filter(p -> p.getExitTime() == null).toList();
         List<PositionOutcome> closed = all.stream().filter(p -> p.getExitTime() != null).toList();
+        
+        // Load instrument configs for trend-buy-dip enabled status
+        Map<String, Instrument> instruments = instrumentRepository.findAll()
+            .stream().collect(Collectors.toMap(Instrument::getSymbol, i -> i));
 
         StringBuilder md = new StringBuilder();
         String now = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'"));
@@ -76,17 +98,28 @@ public class PositionReportService {
         md.append("*Auto-generated: ").append(now).append("*\n\n");
         double riskEur = demoAccountBalance * demoRiskPercent / 100.0;
 
-        // ── Open Positions (at top, same format as closed) ──
-        if (!open.isEmpty()) {
-            md.append("## Open Positions (").append(open.size()).append(")\n\n");
-            md.append("| Entry Time (UTC) | Exit Time (UTC) | Symbol | Dir | Signal | P&L% | Est € | Result | Held |\n");
-            md.append("|------------------|-----------------|--------|-----|--------|------|-------|--------|------|\n");
-            Instant nowI = Instant.now();
-            open.stream()
+        // ── Combined Positions Table (Open + Recent Closed) ──
+        int recentCount = Math.min(closed.size(), 15);
+        md.append("## Positions (Open: ").append(open.size()).append(", Recent Closed: ").append(recentCount).append(" of ").append(closed.size()).append(")\n\n");
+        md.append("| Entry | Exit | Sym | Sig | P&L% | € | Res | Hold |\n");
+        md.append("|-------|------|-----|-----|------|---|-----|------|\n");
+        
+        Instant nowI = Instant.now();
+        double riskEurExit = demoAccountBalance * demoRiskPercent / 100.0;
+        
+        // Open positions first
+        open.stream()
+                .sorted(Comparator.comparing(PositionOutcome::getEntryTime).reversed())
+                .forEach(p -> md.append(formatOpenRowCompact(p, riskEur, nowI, instruments)));
+        
+        // Then recent closed
+        if (!closed.isEmpty()) {
+            closed.stream()
                     .sorted(Comparator.comparing(PositionOutcome::getEntryTime).reversed())
-                    .forEach(p -> md.append(formatOpenRow(p, riskEur, nowI)));
-            md.append("\n");
+                    .limit(recentCount)
+                    .forEach(p -> md.append(formatClosedRowCompact(p, riskEurExit, instruments)));
         }
+        md.append("\n");
 
         // ── Summary ──
         md.append("## Summary\n\n");
@@ -144,12 +177,14 @@ public class PositionReportService {
         // ── By Instrument ──
         if (!closed.isEmpty()) {
             md.append("\n## By Instrument\n\n");
-            md.append("| Instrument | N | Wins | Win% | Avg P&L | Net €(est) |\n");
-            md.append("|-----------|---|------|------|---------|-----------|\n");
+            md.append("| Inst | N | Wins | Win% | Avg P&L | Net € |\n");
+            md.append("|------|---|------|------|---------|-------|\n");
             double riskEurInst = demoAccountBalance * demoRiskPercent / 100.0;
-            closed.stream()
-                    .collect(Collectors.groupingBy(PositionOutcome::getSymbol))
-                    .entrySet().stream()
+            var instGroups = closed.stream()
+                    .collect(Collectors.groupingBy(PositionOutcome::getSymbol));
+            long[] tN = {0}, tWins = {0};
+            double[] tNet = {0};
+            instGroups.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey())
                     .forEach(entry -> {
                         List<PositionOutcome> group = entry.getValue();
@@ -157,14 +192,20 @@ public class PositionReportService {
                         double wr = (double) w / group.size() * 100;
                         double avg = group.stream().mapToDouble(p -> p.getPnlPct().doubleValue()).average().orElse(0);
                         double net = group.stream().mapToDouble(p -> estEur(p, riskEurInst)).sum();
-                        md.append("| ").append(entry.getKey())
+                        String shortName = SHORT_NAMES.getOrDefault(entry.getKey(), entry.getKey());
+                        md.append("| ").append(shortName)
                           .append(" | ").append(group.size())
                           .append(" | ").append(w)
                           .append(" | ").append(String.format("%.0f%%", wr))
                           .append(" | ").append(String.format("%+.2f%%", avg))
                           .append(" | ").append(net >= 0 ? "+" : "").append(String.format("€%.0f", net))
                           .append(" |\n");
+                        tN[0] += group.size(); tWins[0] += w; tNet[0] += net;
                     });
+            double tWr = tN[0] > 0 ? (double) tWins[0] / tN[0] * 100 : 0;
+            md.append("| **Total** | **").append(tN[0]).append("** | **").append(tWins[0]).append("** | **")
+              .append(String.format("%.0f%%", tWr)).append("** | | **")
+              .append(tNet[0] >= 0 ? "+" : "").append(String.format("€%.0f", tNet[0])).append("** |\n");
         }
 
         // ── By Signal Type ──
@@ -173,9 +214,9 @@ public class PositionReportService {
             md.append("| Type | N | Wins | Win% | Avg P&L | TP | SL | Verdict |\n");
             md.append("|------|---|------|------|---------|----|----|--------|\n");
 
-            closed.stream()
-                    .collect(Collectors.groupingBy(p -> p.getSignalType().name()))
-                    .entrySet().stream()
+            var sigGroups = closed.stream().collect(Collectors.groupingBy(p -> p.getSignalType().name()));
+            long[] tN = {0}, tWins = {0}, tTp = {0}, tSl = {0};
+            sigGroups.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey())
                     .forEach(entry -> {
                         List<PositionOutcome> group = entry.getValue();
@@ -194,7 +235,12 @@ public class PositionReportService {
                           .append(" | ").append(sl)
                           .append(" | ").append(verdict)
                           .append(" |\n");
+                        tN[0] += group.size(); tWins[0] += w; tTp[0] += tp; tSl[0] += sl;
                     });
+            double tWr = tN[0] > 0 ? (double) tWins[0] / tN[0] * 100 : 0;
+            md.append("| **Total** | **").append(tN[0]).append("** | **").append(tWins[0])
+              .append("** | **").append(String.format("%.0f%%", tWr)).append("** | | **").append(tTp[0])
+              .append("** | **").append(tSl[0]).append("** | |\n");
         }
 
         // ── By Day ──
@@ -247,31 +293,15 @@ public class PositionReportService {
               .append("** |\n");
         }
 
-        // ── All Closed Positions ──
+        // ── All Closed Positions (moved to end, collapsed if large) ──
         if (!closed.isEmpty()) {
-            double riskEurExit = demoAccountBalance * demoRiskPercent / 100.0;
-            md.append("\n## All Closed Positions (").append(closed.size()).append(" total)\n\n");
-            md.append("| Entry Time (UTC) | Exit Time (UTC) | Symbol | Dir | Signal | P&L% | Est € | Result | Held |\n");
-            md.append("|------------------|-----------------|--------|-----|--------|------|-------|--------|------|\n");
+            md.append("\n<details>\n<summary>All Closed Positions (").append(closed.size()).append(" total) — click to expand</summary>\n\n");
+            md.append("| Entry | Exit | Sym | Sig | P&L% | € | Res | Hold |\n");
+            md.append("|-------|------|-----|-----|------|---|-----|------|\n");
             closed.stream()
                     .sorted(Comparator.comparing(PositionOutcome::getEntryTime).reversed())
-                    .forEach(p -> {
-                        boolean win = Boolean.TRUE.equals(p.getTpHit());
-                        boolean loss = Boolean.TRUE.equals(p.getSlHit());
-                        String result = win ? "TP ✅" : loss ? "SL ❌" : "24h ➖";
-                        double estEur = estEur(p, riskEurExit);
-                        String dir = Boolean.TRUE.equals(p.getIsLong()) ? "▲" : "▼";
-                        md.append("| ").append(p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT))
-                          .append(" | ").append(p.getExitTime().atZone(ZoneOffset.UTC).format(FMT))
-                          .append(" | ").append(p.getSymbol())
-                          .append(" | ").append(dir)
-                          .append(" | ").append(p.getSignalType())
-                          .append(" | ").append(String.format("%+.2f%%", p.getPnlPct().doubleValue()))
-                          .append(" | ").append(estEur >= 0 ? "+" : "").append(String.format("€%.0f", estEur))
-                          .append(" | ").append(result)
-                          .append(" | ").append(p.getHoldingHours() != null ? String.format("%.1fh", p.getHoldingHours()) : "?")
-                          .append(" |\n");
-                    });
+                    .forEach(p -> md.append(formatClosedRowCompact(p, riskEurExit, instruments)));
+            md.append("\n</details>\n");
         }
 
         md.append("\n---\n*Run `make pnl-report` to refresh. Auto-updates daily at 06:00 UTC.*\n");
@@ -322,14 +352,54 @@ public class PositionReportService {
     }
 
     /**
-     * Format an open position as a markdown row aligned with the closed-position table.
-     * P&L% = unrealized (current vs entry), Est € = R-multiple, Result = "OPEN", Exit = "—".
+     * Format a closed position as a compact markdown row with short names.
+     * Adds strikethrough to signal type if TREND_BUY_DIP is disabled for that instrument.
      */
-    private String formatOpenRow(PositionOutcome p, double riskEur, Instant nowI) {
-        String dir = Boolean.TRUE.equals(p.getIsLong()) ? "▲" : "▼";
+    private String formatClosedRowCompact(PositionOutcome p, double riskEur, Map<String, Instrument> instruments) {
+        boolean win = p.getPnlPct().compareTo(BigDecimal.ZERO) > 0;
+        boolean tp = Boolean.TRUE.equals(p.getTpHit());
+        boolean sl = Boolean.TRUE.equals(p.getSlHit());
+        String exitType = tp ? "TP" : sl ? "SL" : "24h";
+        String result = (win ? "✅" : "❌") + exitType;
+        double estEurVal = estEur(p, riskEur);
+        
+        String shortName = SHORT_NAMES.getOrDefault(p.getSymbol(), p.getSymbol());
+        String sigType = p.getSignalType().toString();
+        
+        // Strikethrough if TREND_BUY_DIP is disabled for this instrument
+        Instrument inst = instruments.get(p.getSymbol());
+        if ("TREND_BUY_DIP".equals(sigType) && inst != null && Boolean.FALSE.equals(inst.getTrendBuyDipEnabled())) {
+            sigType = "~~" + sigType + "~~";
+        }
+        
+        return "| " + p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT)
+                + " | " + p.getExitTime().atZone(ZoneOffset.UTC).format(FMT)
+                + " | " + shortName
+                + " | " + sigType
+                + " | " + String.format("%+.2f%%", p.getPnlPct().doubleValue())
+                + " | " + (estEurVal >= 0 ? "+" : "") + String.format("€%.0f", estEurVal)
+                + " | " + result
+                + " | " + (p.getHoldingHours() != null ? String.format("%.1fh", p.getHoldingHours()) : "?")
+                + " |\n";
+    }
+
+    /**
+     * Format an open position as a compact markdown row with short names.
+     */
+    private String formatOpenRowCompact(PositionOutcome p, double riskEur, Instant nowI, Map<String, Instrument> instruments) {
+        String shortName = SHORT_NAMES.getOrDefault(p.getSymbol(), p.getSymbol());
+        String sigType = p.getSignalType().toString();
+        
+        // Strikethrough if TREND_BUY_DIP is disabled for this instrument
+        Instrument inst = instruments.get(p.getSymbol());
+        if ("TREND_BUY_DIP".equals(sigType) && inst != null && Boolean.FALSE.equals(inst.getTrendBuyDipEnabled())) {
+            sigType = "~~" + sigType + "~~";
+        }
+        
         BigDecimal cur = priceHistoryService.getLatestPrice(p.getSymbol());
         String pnlPctStr = "—";
         String estEurStr = "—";
+        String result = "🔵";
         if (cur != null && p.getEntryPrice() != null) {
             double entry = p.getEntryPrice().doubleValue();
             double curD = cur.doubleValue();
@@ -344,16 +414,16 @@ public class PositionReportService {
                     estEurStr = (eur >= 0 ? "+" : "") + String.format("€%.0f", eur);
                 }
             }
+            result = unrealPct >= 0 ? "🟢" : "🔴";
         }
         double heldHours = Duration.between(p.getEntryTime(), nowI).toMinutes() / 60.0;
         return "| " + p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT)
                 + " | — "
-                + " | " + p.getSymbol()
-                + " | " + dir
-                + " | " + p.getSignalType()
+                + " | " + shortName
+                + " | " + sigType
                 + " | " + pnlPctStr
                 + " | " + estEurStr
-                + " | OPEN"
+                + " | " + result + "OPEN"
                 + " | " + String.format("%.1fh", heldHours)
                 + " |\n";
     }

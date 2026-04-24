@@ -46,7 +46,11 @@
 
 | Item | Effort | Notes |
 |------|--------|-------|
-| **RSI-bucket outcome analysis** | ~1h SQL | Once ≥2 weeks of `position_outcomes` exist, split TREND_BUY_DIP wins/losses by rsi15m bucket. If <50 fires win materially more, drop `TREND_DIP_RSI_THRESHOLD` 60 → 50. Query in `project-log.md`. |
+| **Lower dip RSI threshold 60 → 45** | ~15min | Primary fix for the 0% TP hit rate on 22 closed trades (Apr 19–23). `dipRsiThreshold=60` catches price barely pulled back from overbought — classic "top of pullback" entry. Investopedia cites RSI ~50 as the canonical uptrend dip-buy zone; trading literature commonly uses 40–45 for the "deep dip" variant. Revisit after 20+ trades at 45. |
+| **ADX(14) trend-strength filter** | ~2h | Only fire TREND_BUY_DIP when ADX(14) on the trend timeframe (1h) > 20. Below 20 the market is ranging, not trending — Schwab/FXNX/Investopedia consistently cite ADX<20 as the ranging cutoff. Likely removes most of the DAX/FTSE losses which fire during chop. |
+| **Close + Open above Summary** | ~30min | Move the full `All Closed Positions` table to just above Open in the P&L report, so both recent-trade tables are at the top before the Summary / By-Instrument sections. |
+| **Periodic candle CSV export + DB cleanup** | ~2h | Extend `PriceHistoryService` trimming: keep last N days in DB, archive older rows to a dated CSV in `reports/candles/` before pruning. Frees EC2 disk without losing history. Alternative: scheduled daily `\copy` via a DB cron. |
+| **RSI-bucket outcome analysis** | ~1h SQL | Once ≥2 weeks of `position_outcomes` exist, split TREND_BUY_DIP wins/losses by rsi15m bucket. If <50 fires win materially more, this confirms the RSI-threshold change above. Query in `project-log.md`. |
 | **Enable Claude AI enrichment** | ~30min | Set `CLAUDE_API_KEY` + `CLAUDE_ENABLED=true`. Service already built. |
 | **Telegram bot commands** | ~3h | `/position`, `/close`, `/status`, `/mute`, `/notrade` — manage service via Telegram. Admin-only via chat-id allowlist. |
 | **Momentum fading detector** | ~2h | Notify "FAST TF DIVERGENCE" when 3/3 aligned but fast TFs flip. Exit-timing signal using existing RSI values. |
