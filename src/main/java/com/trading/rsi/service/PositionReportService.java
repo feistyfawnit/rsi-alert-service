@@ -23,6 +23,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Generates a human-readable markdown P&L report from position_outcomes.
@@ -101,23 +102,25 @@ public class PositionReportService {
         // ── Combined Positions Table (Open + Recent Closed) ──
         int recentCount = Math.min(closed.size(), 15);
         md.append("## Positions (Open: ").append(open.size()).append(", Recent Closed: ").append(recentCount).append(" of ").append(closed.size()).append(")\n\n");
-        md.append("| Entry | Exit | Sym | Sig | P&L% | € | Res | Hold |\n");
-        md.append("|-------|------|-----|-----|------|---|-----|------|\n");
+        md.append("| # | Entry | Sym | Sig | P&L% | € | Res | Hold |\n");
+        md.append("|---|-------|-----|-----|------|---|-----|------|\n");
         
         Instant nowI = Instant.now();
         double riskEurExit = demoAccountBalance * demoRiskPercent / 100.0;
         
+        AtomicInteger rowNum = new AtomicInteger(1);
+
         // Open positions first
         open.stream()
                 .sorted(Comparator.comparing(PositionOutcome::getEntryTime).reversed())
-                .forEach(p -> md.append(formatOpenRowCompact(p, riskEur, nowI, instruments)));
+                .forEach(p -> md.append(formatOpenRowCompact(p, riskEur, nowI, instruments, rowNum.getAndIncrement())));
         
         // Then recent closed
         if (!closed.isEmpty()) {
             closed.stream()
                     .sorted(Comparator.comparing(PositionOutcome::getEntryTime).reversed())
                     .limit(recentCount)
-                    .forEach(p -> md.append(formatClosedRowCompact(p, riskEurExit, instruments)));
+                    .forEach(p -> md.append(formatClosedRowCompact(p, riskEurExit, instruments, rowNum.getAndIncrement())));
         }
         md.append("\n");
 
@@ -296,11 +299,12 @@ public class PositionReportService {
         // ── All Closed Positions (moved to end, collapsed if large) ──
         if (!closed.isEmpty()) {
             md.append("\n<details>\n<summary>All Closed Positions (").append(closed.size()).append(" total) — click to expand</summary>\n\n");
-            md.append("| Entry | Exit | Sym | Sig | P&L% | € | Res | Hold |\n");
-            md.append("|-------|------|-----|-----|------|---|-----|------|\n");
+            md.append("| # | Entry | Sym | Sig | P&L% | € | Res | Hold |\n");
+            md.append("|---|-------|-----|-----|------|---|-----|------|\n");
+            AtomicInteger detailRow = new AtomicInteger(1);
             closed.stream()
                     .sorted(Comparator.comparing(PositionOutcome::getEntryTime).reversed())
-                    .forEach(p -> md.append(formatClosedRowCompact(p, riskEurExit, instruments)));
+                    .forEach(p -> md.append(formatClosedRowCompact(p, riskEurExit, instruments, detailRow.getAndIncrement())));
             md.append("\n</details>\n");
         }
 
@@ -355,25 +359,25 @@ public class PositionReportService {
      * Format a closed position as a compact markdown row with short names.
      * Adds strikethrough to signal type if TREND_BUY_DIP is disabled for that instrument.
      */
-    private String formatClosedRowCompact(PositionOutcome p, double riskEur, Map<String, Instrument> instruments) {
+    private String formatClosedRowCompact(PositionOutcome p, double riskEur, Map<String, Instrument> instruments, int rowNum) {
         boolean win = p.getPnlPct().compareTo(BigDecimal.ZERO) > 0;
         boolean tp = Boolean.TRUE.equals(p.getTpHit());
         boolean sl = Boolean.TRUE.equals(p.getSlHit());
         String exitType = tp ? "TP" : sl ? "SL" : "24h";
         String result = (win ? "✅" : "❌") + exitType;
         double estEurVal = estEur(p, riskEur);
-        
+
         String shortName = SHORT_NAMES.getOrDefault(p.getSymbol(), p.getSymbol());
         String sigType = p.getSignalType().toString();
-        
+
         // Strikethrough if TREND_BUY_DIP is disabled for this instrument
         Instrument inst = instruments.get(p.getSymbol());
         if ("TREND_BUY_DIP".equals(sigType) && inst != null && Boolean.FALSE.equals(inst.getTrendBuyDipEnabled())) {
             sigType = "~~" + sigType + "~~";
         }
-        
-        return "| " + p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT)
-                + " | " + p.getExitTime().atZone(ZoneOffset.UTC).format(FMT)
+
+        return "| " + rowNum
+                + " | " + p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT)
                 + " | " + shortName
                 + " | " + sigType
                 + " | " + String.format("%+.2f%%", p.getPnlPct().doubleValue())
@@ -386,16 +390,16 @@ public class PositionReportService {
     /**
      * Format an open position as a compact markdown row with short names.
      */
-    private String formatOpenRowCompact(PositionOutcome p, double riskEur, Instant nowI, Map<String, Instrument> instruments) {
+    private String formatOpenRowCompact(PositionOutcome p, double riskEur, Instant nowI, Map<String, Instrument> instruments, int rowNum) {
         String shortName = SHORT_NAMES.getOrDefault(p.getSymbol(), p.getSymbol());
         String sigType = p.getSignalType().toString();
-        
+
         // Strikethrough if TREND_BUY_DIP is disabled for this instrument
         Instrument inst = instruments.get(p.getSymbol());
         if ("TREND_BUY_DIP".equals(sigType) && inst != null && Boolean.FALSE.equals(inst.getTrendBuyDipEnabled())) {
             sigType = "~~" + sigType + "~~";
         }
-        
+
         BigDecimal cur = priceHistoryService.getLatestPrice(p.getSymbol());
         String pnlPctStr = "—";
         String estEurStr = "—";
@@ -417,8 +421,8 @@ public class PositionReportService {
             result = unrealPct >= 0 ? "🟢" : "🔴";
         }
         double heldHours = Duration.between(p.getEntryTime(), nowI).toMinutes() / 60.0;
-        return "| " + p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT)
-                + " | — "
+        return "| " + rowNum
+                + " | " + p.getEntryTime().atZone(ZoneOffset.UTC).format(FMT)
                 + " | " + shortName
                 + " | " + sigType
                 + " | " + pnlPctStr

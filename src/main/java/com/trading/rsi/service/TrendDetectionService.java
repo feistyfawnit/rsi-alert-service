@@ -61,7 +61,7 @@ public class TrendDetectionService {
     @Value("${rsi.trend.consecutive-signals-for-trend:2}")
     private int consecutiveSignalsForTrend;
 
-    @Value("${rsi.trend.dip-rsi-threshold:60}")
+    @Value("${rsi.trend.dip-rsi-threshold:45}")
     private double dipRsiThreshold;
 
     @Value("${rsi.trend.rally-rsi-threshold:40}")

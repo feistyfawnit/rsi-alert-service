@@ -19,7 +19,7 @@
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
 | IG API rate limit ban | Medium | High | Exponential backoff; respect limits; demo-first |
-| False signals in choppy markets | High | Medium | Consider ADX filter (trend strength > 20) |
+| False signals in choppy markets | High | Medium | ✅ ADX filter deployed Apr 24 — ADX(14)>20 required for trend entries |
 | RSI calculation bugs | Low | High | Unit test against TA-Lib; backtest on historical data |
 | Railway downtime | Low | Medium | Health check monitoring; email alert on crash |
 | Market closure edge case | Medium | Low | Skip polling outside market hours per instrument |
@@ -40,7 +40,6 @@
 ## Open Items
 
 - **Backtesting** — fetch 3–6 months historical data, replay signals before live trading
-- **ADX filter** — RSI alone is noisy in sideways markets; consider requiring ADX > 20 for confirmation
 - **Market hours** — skip polling closed markets (DAX 08:00–22:00 CET, FTSE 08:00–16:30 GMT); crypto 24/7
 - **Staggered polling** — 1m TF: 15s, 5m TF: 30s, 1h/4h TF: 2–5 min — reduces IG API calls ~60%
 - **DB/YAML instrument sync** — when epic codes change in `application.yml`, stale DB rows must be disabled/deleted manually. JPA `ddl-auto: update` does not remove old rows. Consider a startup reconciliation job that disables DB instruments not present in YAML.

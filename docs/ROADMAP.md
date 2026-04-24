@@ -20,6 +20,7 @@
 
 | Date | Milestone | Details |
 |------|-----------|---------|
+| 2026-04-24 | **dipRsiThreshold 60→45 + ADX(14)>20 filter** | P1 fixes from 22-trade analysis. Threshold targets Investopedia-cited "deep pullback in uptrend" zone (40–50). ADX filter suppresses TREND_BUY_DIP during ranging markets (Schwab/Investopedia: ADX<20 = no trend). Deployed together; monitoring 1 week before P2. |
 | 2026-04-22 | **Silent signal recording** | Per-instrument `trend-buy-dip-notify` flag — signals log to `position_outcomes` without Telegram alert. S&P 500 TREND_BUY_DIP now silent pending ≥20 trade sample. |
 | 2026-04-22 | **Crypto enabled broadly** | BTC + ETH TREND_BUY_DIP re-enabled after R:R drop to 2:1 (previously unreachable at 3:1). |
 | 2026-04-22 | **ATR stops + asset-class R:R + R-multiple P&L** | `AtrCalculator` on 15m; stops = ATR × 1.5 (trend) / 2.0 (other). Trend R:R now 2:1 crypto / 3:1 indices. Report €-estimate uses `pnlPct / stopPctAtEntry × riskEur` so 24h auto-closes at +P&L count correctly. Unified crypto exit timeframe to 15m (fixes the SOL 24h auto-close bug where 5m was never polled). |
@@ -46,8 +47,7 @@
 
 | Item | Effort | Notes |
 |------|--------|-------|
-| **Lower dip RSI threshold 60 → 45** | ~15min | Primary fix for the 0% TP hit rate on 22 closed trades (Apr 19–23). `dipRsiThreshold=60` catches price barely pulled back from overbought — classic "top of pullback" entry. Investopedia cites RSI ~50 as the canonical uptrend dip-buy zone; trading literature commonly uses 40–45 for the "deep dip" variant. Revisit after 20+ trades at 45. |
-| **ADX(14) trend-strength filter** | ~2h | Only fire TREND_BUY_DIP when ADX(14) on the trend timeframe (1h) > 20. Below 20 the market is ranging, not trending — Schwab/FXNX/Investopedia consistently cite ADX<20 as the ranging cutoff. Likely removes most of the DAX/FTSE losses which fire during chop. |
+| **Volume confirmation for crypto dips** | ~2h | Require 15m entry-candle volume > 1.2× 20-period mean for crypto TREND_BUY_DIP. IG index volume unreliable — skip for indices. Source: LuxAlgo volume guide + r/algotrading consensus. |
 | **Close + Open above Summary** | ~30min | Move the full `All Closed Positions` table to just above Open in the P&L report, so both recent-trade tables are at the top before the Summary / By-Instrument sections. |
 | **Periodic candle CSV export + DB cleanup** | ~2h | Extend `PriceHistoryService` trimming: keep last N days in DB, archive older rows to a dated CSV in `reports/candles/` before pruning. Frees EC2 disk without losing history. Alternative: scheduled daily `\copy` via a DB cron. |
 | **RSI-bucket outcome analysis** | ~1h SQL | Once ≥2 weeks of `position_outcomes` exist, split TREND_BUY_DIP wins/losses by rsi15m bucket. If <50 fires win materially more, this confirms the RSI-threshold change above. Query in `project-log.md`. |

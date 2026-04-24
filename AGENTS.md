@@ -17,13 +17,13 @@ If you are reviewing or changing this repo, read in this order:
 
 ## Current Runtime Shape
 
-- **Binance instruments**: `SOLUSDT` (full signals), `BTCUSDT` (enabled, TREND_BUY_DIP suppressed — history collection only), `ETHUSDT`/`BCHUSDT` (disabled)
+- **Binance instruments**: `SOLUSDT` (full signals), `BTCUSDT`/`ETHUSDT` (enabled, no suppression), `BCHUSDT` (disabled)
   - Timeframes: `15m,1h,4h`
-- **IG indices**: DAX, S&P 500 (full signals); FTSE 100 (enabled, TREND_BUY_DIP suppressed); Nasdaq 100 (disabled)
+- **IG indices**: DAX (full signals, 0/7 TREND_BUY_DIP in current data — under review); S&P 500 (TREND_BUY_DIP silent `notify:false` — recording P&L without Telegram noise); FTSE 100 (TREND_BUY_DIP disabled); Nasdaq 100 (disabled)
   - Timeframes: `15m,30m,1h`
-- **IG commodities**: Gold (enabled, TREND_BUY_DIP suppressed); Silver, Oil (disabled)
+- **IG commodities**: Gold (TREND_BUY_DIP disabled); Silver, Oil (disabled)
   - Timeframes: `15m,1h,4h`
-- **`trend-buy-dip-enabled` flag**: per-instrument in YAML, synced to DB on restart. FTSE/Gold/Silver = false (backtest −0.86R to −1.00R). YAML wins for this field (unlike `enabled` which DB preserves).
+- **`trend-buy-dip-enabled` / `trend-buy-dip-notify` flags**: per-instrument in YAML, synced to DB on restart. YAML wins for these fields (unlike `enabled` which DB preserves). FTSE/Gold = disabled; S&P = silent recording.
 
 ## Important Guardrails
 
@@ -41,6 +41,7 @@ If you are reviewing or changing this repo, read in this order:
 - **Reward:Risk** (trend signals): crypto 2:1, indices 3:1, commodities 3:1. Non-trend always 2:1. Configurable per asset class under `rsi.demo.trend-rr-*`.
 - **Crypto 2:1** was lowered from 3:1 after SOL produced 5 wins all via 24h auto-close at +2–3% with zero TP hits — 3:1 target was unreachable on a 24h horizon.
 - **P&L report** uses R-multiple €-estimation: `€ = (pnlPct / stopPctAtEntry) × riskEur`. This correctly credits 24h auto-closes with positive P&L (was previously mis-classified as fixed-€ losses).
+- **Apr 24 2026 P1 changes deployed**: `dipRsiThreshold` lowered 60→45 (cited: Investopedia pullback-in-uptrend zone); `ADX(14) > 20` filter enabled on trend timeframe to skip entries during ranging markets. Monitoring for 1 week before P2.
 
 ## Canonical Truth vs Historical Docs
 

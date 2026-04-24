@@ -53,8 +53,9 @@ class TrendDetectionServiceTest {
         ReflectionTestUtils.setField(trendDetectionService, "emaPeriod", 20);
         ReflectionTestUtils.setField(trendDetectionService, "emaTrendTimeframe", "1h");
         ReflectionTestUtils.setField(trendDetectionService, "consecutiveSignalsForTrend", 2);
-        ReflectionTestUtils.setField(trendDetectionService, "dipRsiThreshold", 60.0);
-        ReflectionTestUtils.setField(trendDetectionService, "rallyRsiThreshold", 40.0);
+        ReflectionTestUtils.setField(trendDetectionService, "dipRsiThreshold", 45.0);
+        ReflectionTestUtils.setField(trendDetectionService, "rallyRsiThreshold", 55.0);
+        ReflectionTestUtils.setField(trendDetectionService, "adxFilterEnabled", false);
         ReflectionTestUtils.setField(trendDetectionService, "trendTimeoutHours", 12);
         ReflectionTestUtils.setField(trendDetectionService, "suppressCounterTrend", true);
 
@@ -103,23 +104,23 @@ class TrendDetectionServiceTest {
         BigDecimal price1 = new BigDecimal("88.00");
         BigDecimal price2 = new BigDecimal("88.10"); // 0.11% move — below 0.3% threshold
 
-        // RSI at 55 → below dipRsiThreshold (60) and above 30 → triggers dip
+        // RSI at 55 → above dipRsiThreshold (45) → does NOT trigger dip. Use 42 for dip trigger.
         Map<String, BigDecimal> dipRsi = Map.of(
-                "15m", new BigDecimal("55"),
+                "15m", new BigDecimal("42"),
                 "1h", new BigDecimal("65"),
                 "4h", new BigDecimal("72")
         );
 
-        // First dip call → should fire
+        // First dip call → should fire (RSI 42 < 45 threshold)
         trendDetectionService.checkForTrendEntry(instrument, dipRsi, price1, triggerCandle);
         verify(eventPublisher, times(1)).publishEvent(any(SignalEvent.class));
 
-        // Second dip call at similar price, RSI stayed below 60 → should be SUPPRESSED
+        // Second dip call at similar price, RSI stayed below 45 → should be SUPPRESSED
         trendDetectionService.checkForTrendEntry(instrument, dipRsi, price2, triggerCandle);
         verify(eventPublisher, times(1)).publishEvent(any(SignalEvent.class)); // still 1
     }
 
-    // ── Scenario 2: Repeat dip at similar price, RSI recovers above 60 → FIRES ──
+    // ── Scenario 2: Repeat dip at similar price, RSI recovers above 45 → FIRES ──
 
     @Test
     void dipDedupe_similarPrice_rsiRecovers_secondFires() {
@@ -131,23 +132,23 @@ class TrendDetectionServiceTest {
         BigDecimal price2 = new BigDecimal("88.10"); // similar price
 
         Map<String, BigDecimal> dipRsi = Map.of(
-                "15m", new BigDecimal("55"),
+                "15m", new BigDecimal("42"),
                 "1h", new BigDecimal("65"),
                 "4h", new BigDecimal("72")
         );
 
-        // First dip → fires
+        // First dip → fires (RSI 42 < 45)
         trendDetectionService.checkForTrendEntry(instrument, dipRsi, price1, triggerCandle);
         verify(eventPublisher, times(1)).publishEvent(any(SignalEvent.class));
 
-        // RSI recovers above threshold (poll cycle with RSI >= 60)
+        // RSI recovers above threshold (poll cycle with RSI >= 45)
         Map<String, BigDecimal> recoveredRsi = Map.of(
-                "15m", new BigDecimal("63"),
+                "15m", new BigDecimal("48"),
                 "1h", new BigDecimal("68"),
                 "4h", new BigDecimal("74")
         );
         trendDetectionService.checkForTrendEntry(instrument, recoveredRsi, price2, triggerCandle);
-        // RSI=63 >= 60 → sets dipRsiRecovered=true; RSI not < 60, so no new dip signal
+        // RSI=48 >= 45 → sets dipRsiRecovered=true; RSI not < 45, so no new dip signal
 
         // Second dip after recovery → should fire
         trendDetectionService.checkForTrendEntry(instrument, dipRsi, price2, triggerCandle);
@@ -166,16 +167,16 @@ class TrendDetectionServiceTest {
         BigDecimal price2 = new BigDecimal("88.50"); // 0.57% move — above 0.3% threshold
 
         Map<String, BigDecimal> dipRsi = Map.of(
-                "15m", new BigDecimal("55"),
+                "15m", new BigDecimal("42"),
                 "1h", new BigDecimal("65"),
                 "4h", new BigDecimal("72")
         );
 
-        // First dip → fires
+        // First dip → fires (RSI 42 < 45)
         trendDetectionService.checkForTrendEntry(instrument, dipRsi, price1, triggerCandle);
         verify(eventPublisher, times(1)).publishEvent(any(SignalEvent.class));
 
-        // Second dip at >0.3% different price (RSI never recovered) → should FIRE
+        // Second dip at >0.3% different price (RSI never recovered above 45) → should FIRE
         trendDetectionService.checkForTrendEntry(instrument, dipRsi, price2, triggerCandle);
         verify(eventPublisher, times(2)).publishEvent(any(SignalEvent.class));
     }
@@ -189,11 +190,12 @@ class TrendDetectionServiceTest {
                 .thenReturn(true);
 
         Map<String, BigDecimal> dipRsi = Map.of(
-                "15m", new BigDecimal("55"),
+                "15m", new BigDecimal("42"),
                 "1h", new BigDecimal("65"),
                 "4h", new BigDecimal("72")
         );
 
+        // RSI 42 < 45 threshold → should fire
         trendDetectionService.checkForTrendEntry(instrument, dipRsi, new BigDecimal("88.00"), triggerCandle);
 
         ArgumentCaptor<SignalEvent> captor = ArgumentCaptor.forClass(SignalEvent.class);
