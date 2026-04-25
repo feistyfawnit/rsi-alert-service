@@ -92,6 +92,11 @@ rsi:
     adx-filter-enabled: ${TREND_ADX_FILTER_ENABLED:true}
     adx-period: ${TREND_ADX_PERIOD:14}
     adx-threshold: ${TREND_ADX_THRESHOLD:20.0}
+    # Crypto volume confirmation for TREND_BUY_DIP — high volume validates pullbacks per LuxAlgo / r/algotrading.
+    # IG CFD volume is unreliable; filter only applies to CRYPTO instruments.
+    crypto-volume-filter-enabled: ${TREND_CRYPTO_VOLUME_FILTER_ENABLED:true}
+    crypto-volume-multiplier: ${TREND_CRYPTO_VOLUME_MULTIPLIER:1.2}
+    crypto-volume-lookback: ${TREND_CRYPTO_VOLUME_LOOKBACK:20}
 
   timeframes:
     - 1m

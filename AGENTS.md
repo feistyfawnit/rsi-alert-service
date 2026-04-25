@@ -42,6 +42,19 @@ If you are reviewing or changing this repo, read in this order:
 - **Crypto 2:1** was lowered from 3:1 after SOL produced 5 wins all via 24h auto-close at +2–3% with zero TP hits — 3:1 target was unreachable on a 24h horizon.
 - **P&L report** uses R-multiple €-estimation: `€ = (pnlPct / stopPctAtEntry) × riskEur`. This correctly credits 24h auto-closes with positive P&L (was previously mis-classified as fixed-€ losses).
 - **Apr 24 2026 P1 changes deployed**: `dipRsiThreshold` lowered 60→45 (cited: Investopedia pullback-in-uptrend zone); `ADX(14) > 20` filter enabled on trend timeframe to skip entries during ranging markets. Monitoring for 1 week before P2.
+- **Crypto volume confirmation** (`rsi.trend.crypto-volume-*`): TREND_BUY_DIP on CRYPTO instruments requires trigger-candle 15m volume > 1.2× the 20-period mean. IG CFD volume is unreliable — filter is silently skipped for indices/commodities and during warmup (<20 candles). Source: LuxAlgo volume guide + r/algotrading consensus.
+
+## Efficiency & Resource Guardrails
+
+The app runs on an **AWS t3.micro (1 GB RAM, 1 vCPU)**. Efficiency is a first-class priority — every change must consider heap, DB, and API cost.
+
+- **JVM is tightly capped**: `-Xmx320m -XX:MaxMetaspaceSize=64m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC`. Do not raise these without profiling first.
+- **Docker hard limits**: app container `memory: 450M`, Postgres `memory: 100M`. OOM kills are real.
+- **DB queries must be bounded**: `findBySymbolAndTimeframeOrderByCandleTimeAsc(...)` fetches **all** rows. Always paginate or limit (`Pageable` / `TOP N`) when querying time-series tables (`candle_history`, `signal_logs`, `position_outcomes`). Unbounded queries will eventually exhaust heap on EC2.
+- **Tables that grow forever need archival**: `candle_history`, `position_outcomes`, `signal_logs` (90-day archival already exists). Extend the same pattern to `position_outcomes` and `candle_history`.
+- **Phase 5 anomaly services** (`VolumeAnomalyDetector`, `PolymarketMonitorService`) are live but lightweight. Do not add more scheduled polling loops without checking CPU impact on the single vCPU.
+- **Telegram message batching**: `PartialSignalMonitorService` already tightened (60 min window, 30 min interval). Do not increase notification frequency.
+- **No local + AWS simultaneous runs**: doubles IG data point consumption and JVM/DB contention. `make up` is guarded with `LOCAL_RUN=yes` check.
 
 ## Canonical Truth vs Historical Docs
 

@@ -1,9 +1,11 @@
 package com.trading.rsi.service;
 
+import com.trading.rsi.domain.CandleHistory;
 import com.trading.rsi.domain.Instrument;
 import com.trading.rsi.domain.SignalLog;
 import com.trading.rsi.event.SignalEvent;
 import com.trading.rsi.model.Candle;
+import com.trading.rsi.repository.CandleHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +18,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -42,6 +45,9 @@ class TrendDetectionServiceTest {
     @Mock
     private PriceHistoryService priceHistoryService;
 
+    @Mock
+    private CandleHistoryRepository candleHistoryRepository;
+
     @InjectMocks
     private TrendDetectionService trendDetectionService;
 
@@ -58,6 +64,9 @@ class TrendDetectionServiceTest {
         ReflectionTestUtils.setField(trendDetectionService, "adxFilterEnabled", false);
         ReflectionTestUtils.setField(trendDetectionService, "trendTimeoutHours", 12);
         ReflectionTestUtils.setField(trendDetectionService, "suppressCounterTrend", true);
+        ReflectionTestUtils.setField(trendDetectionService, "cryptoVolumeFilterEnabled", true);
+        ReflectionTestUtils.setField(trendDetectionService, "cryptoVolumeMultiplier", 1.2);
+        ReflectionTestUtils.setField(trendDetectionService, "cryptoVolumeLookback", 20);
 
         instrument = Instrument.builder()
                 .symbol("SOLUSDT")
@@ -179,6 +188,113 @@ class TrendDetectionServiceTest {
         // Second dip at >0.3% different price (RSI never recovered above 45) → should FIRE
         trendDetectionService.checkForTrendEntry(instrument, dipRsi, price2, triggerCandle);
         verify(eventPublisher, times(2)).publishEvent(any(SignalEvent.class));
+    }
+
+    // ── Volume filter: crypto TREND_BUY_DIP ──
+
+    private List<CandleHistory> buildVolumeHistory(int count, double volumePerCandle) {
+        List<CandleHistory> list = new ArrayList<>();
+        Instant base = Instant.now().minusSeconds(count * 900L);
+        for (int i = 0; i < count; i++) {
+            list.add(CandleHistory.builder()
+                    .symbol("SOLUSDT")
+                    .timeframe("15m")
+                    .candleTime(base.plusSeconds(i * 900L))
+                    .open(BigDecimal.valueOf(100))
+                    .high(BigDecimal.valueOf(101))
+                    .low(BigDecimal.valueOf(99))
+                    .close(BigDecimal.valueOf(100))
+                    .volume(BigDecimal.valueOf(volumePerCandle))
+                    .build());
+        }
+        return list;
+    }
+
+    @Test
+    void cryptoVolumeFilter_volumeAboveThreshold_fires() {
+        stubUptrend();
+        when(cooldownService.shouldAlert(eq("SOLUSDT"), eq(SignalLog.SignalType.TREND_BUY_DIP)))
+                .thenReturn(true);
+
+        // 20 candles with mean volume 1000; trigger volume 1300 = 1.3× → passes 1.2× threshold
+        List<CandleHistory> history = buildVolumeHistory(20, 1000.0);
+        when(candleHistoryRepository.findBySymbolAndTimeframeOrderByCandleTimeAsc("SOLUSDT", "15m"))
+                .thenReturn(history);
+
+        Map<String, BigDecimal> dipRsi = Map.of(
+                "15m", new BigDecimal("42"),
+                "1h", new BigDecimal("65"),
+                "4h", new BigDecimal("72")
+        );
+        Candle highVolumeCandle = Candle.builder()
+                .timestamp(Instant.now())
+                .open(new BigDecimal("88"))
+                .high(new BigDecimal("89"))
+                .low(new BigDecimal("87"))
+                .close(new BigDecimal("88"))
+                .volume(new BigDecimal("1300"))
+                .build();
+
+        trendDetectionService.checkForTrendEntry(instrument, dipRsi, new BigDecimal("88.00"), highVolumeCandle);
+        verify(eventPublisher, times(1)).publishEvent(any(SignalEvent.class));
+    }
+
+    @Test
+    void cryptoVolumeFilter_volumeBelowThreshold_suppressed() {
+        stubUptrend();
+
+        // 20 candles with mean volume 1000; trigger volume 1000 = 1.0× → fails 1.2× threshold
+        List<CandleHistory> history = buildVolumeHistory(20, 1000.0);
+        when(candleHistoryRepository.findBySymbolAndTimeframeOrderByCandleTimeAsc("SOLUSDT", "15m"))
+                .thenReturn(history);
+
+        Map<String, BigDecimal> dipRsi = Map.of(
+                "15m", new BigDecimal("42"),
+                "1h", new BigDecimal("65"),
+                "4h", new BigDecimal("72")
+        );
+        Candle lowVolumeCandle = Candle.builder()
+                .timestamp(Instant.now())
+                .open(new BigDecimal("88"))
+                .high(new BigDecimal("89"))
+                .low(new BigDecimal("87"))
+                .close(new BigDecimal("88"))
+                .volume(new BigDecimal("1000"))
+                .build();
+
+        trendDetectionService.checkForTrendEntry(instrument, dipRsi, new BigDecimal("88.00"), lowVolumeCandle);
+        verify(eventPublisher, never()).publishEvent(any(SignalEvent.class));
+    }
+
+    @Test
+    void cryptoVolumeFilter_notAppliedToIndices() {
+        when(cooldownService.shouldAlert(eq("IX.D.DAX.DAILY.IP"), eq(SignalLog.SignalType.TREND_BUY_DIP)))
+                .thenReturn(true);
+
+        Instrument index = Instrument.builder()
+                .symbol("IX.D.DAX.DAILY.IP")
+                .name("DAX 40")
+                .source(Instrument.DataSource.IG)
+                .type(Instrument.InstrumentType.INDEX)
+                .enabled(true)
+                .timeframes("15m,30m,1h")
+                .oversoldThreshold(30)
+                .overboughtThreshold(70)
+                .build();
+
+        // Establish STRONG_UPTREND via consecutive overbought signals (fallback 2)
+        trendDetectionService.recordSignal("IX.D.DAX.DAILY.IP", SignalLog.SignalType.OVERBOUGHT);
+        trendDetectionService.recordSignal("IX.D.DAX.DAILY.IP", SignalLog.SignalType.OVERBOUGHT);
+
+        // Even with empty repo (no candles), index should skip volume check and fire
+        Map<String, BigDecimal> dipRsi = Map.of(
+                "15m", new BigDecimal("42"),
+                "30m", new BigDecimal("65"),
+                "1h", new BigDecimal("72")
+        );
+
+        trendDetectionService.checkForTrendEntry(index, dipRsi, new BigDecimal("18000.00"), triggerCandle);
+        verify(eventPublisher, times(1)).publishEvent(any(SignalEvent.class));
     }
 
     // ── Verify first dip always fires (sanity) ──

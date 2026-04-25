@@ -1,10 +1,12 @@
 package com.trading.rsi.service;
 
+import com.trading.rsi.domain.CandleHistory;
 import com.trading.rsi.domain.Instrument;
 import com.trading.rsi.domain.SignalLog;
 import com.trading.rsi.event.SignalEvent;
 import com.trading.rsi.model.Candle;
 import com.trading.rsi.model.RsiSignal;
+import com.trading.rsi.repository.CandleHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,6 +53,7 @@ public class TrendDetectionService {
     private final EmaCalculator emaCalculator;
     private final PriceHistoryService priceHistoryService;
     private final AdxCalculator adxCalculator;
+    private final CandleHistoryRepository candleHistoryRepository;
 
     @Value("${rsi.trend.ema-period:20}")
     private int emaPeriod;
@@ -84,6 +87,15 @@ public class TrendDetectionService {
 
     @Value("${rsi.trend.adx-threshold:20.0}")
     private double adxThreshold;
+
+    @Value("${rsi.trend.crypto-volume-filter-enabled:true}")
+    private boolean cryptoVolumeFilterEnabled;
+
+    @Value("${rsi.trend.crypto-volume-multiplier:1.2}")
+    private double cryptoVolumeMultiplier;
+
+    @Value("${rsi.trend.crypto-volume-lookback:20}")
+    private int cryptoVolumeLookback;
 
     private static final int MOMENTUM_LOOKBACK = 5;
     private static final double MOMENTUM_THRESHOLD_PCT = 1.0;
@@ -320,6 +332,13 @@ public class TrendDetectionService {
                         return;
                     }
                 }
+
+                // Volume confirmation: high volume validates pullbacks (LuxAlgo / r/algotrading).
+                // IG CFD volume is unreliable — only applied to CRYPTO. Skip silently during warmup.
+                if (!isVolumeConfirmed(instrument, triggerCandle)) {
+                    return;
+                }
+
                 SignalLog.SignalType type = SignalLog.SignalType.TREND_BUY_DIP;
                 if (cooldownService.shouldAlert(instrument.getSymbol(), type)) {
                     int obCount = consecutiveOverbought.getOrDefault(instrument.getSymbol(), 0);
@@ -400,6 +419,55 @@ public class TrendDetectionService {
         log.debug("Momentum {} ({}): {}% over {} candles",
                 symbol, emaTrendTimeframe, String.format("%.2f", changePct), MOMENTUM_LOOKBACK);
         return changePct;
+    }
+
+    /**
+     * Volume confirmation for crypto TREND_BUY_DIP.
+     * Returns true if:
+     *   - instrument is not CRYPTO (filter does not apply to indices/commodities)
+     *   - filter is disabled
+     *   - insufficient candle history (< lookback)
+     *   - trigger candle volume >= mean volume of last `lookback` 15m candles × multiplier
+     *
+     * Logs skip reason when volume is too low.
+     */
+    private boolean isVolumeConfirmed(Instrument instrument, Candle triggerCandle) {
+        if (instrument.getType() != Instrument.InstrumentType.CRYPTO) {
+            return true;
+        }
+        if (!cryptoVolumeFilterEnabled) {
+            return true;
+        }
+        if (triggerCandle == null || triggerCandle.getVolume() == null) {
+            return true;
+        }
+
+        List<CandleHistory> candles = candleHistoryRepository
+                .findBySymbolAndTimeframeOrderByCandleTimeAsc(instrument.getSymbol(), "15m");
+        if (candles == null || candles.size() < cryptoVolumeLookback) {
+            return true; // warmup — better to alert than miss
+        }
+
+        List<CandleHistory> lookback = candles.subList(candles.size() - cryptoVolumeLookback, candles.size());
+        double meanVolume = lookback.stream()
+                .mapToDouble(c -> c.getVolume() != null ? c.getVolume().doubleValue() : 0.0)
+                .average()
+                .orElse(0.0);
+
+        double triggerVolume = triggerCandle.getVolume().doubleValue();
+        double threshold = meanVolume * cryptoVolumeMultiplier;
+
+        if (triggerVolume >= threshold) {
+            log.debug("Volume confirmed for {} — {} >= {}× mean ({})",
+                    instrument.getSymbol(), triggerCandle.getVolume(), cryptoVolumeMultiplier,
+                    BigDecimal.valueOf(meanVolume).setScale(2, RoundingMode.HALF_UP));
+            return true;
+        }
+
+        log.info("Trend entry suppressed for {} — volume {} < {}× mean ({})",
+                instrument.getSymbol(), triggerCandle.getVolume(), cryptoVolumeMultiplier,
+                BigDecimal.valueOf(meanVolume).setScale(2, RoundingMode.HALF_UP));
+        return false;
     }
 
     private BigDecimal getFastestRsi(Map<String, BigDecimal> rsiValues, String timeframesConfig) {
