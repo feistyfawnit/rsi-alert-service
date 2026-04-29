@@ -98,6 +98,28 @@ rsi:
     crypto-volume-multiplier: ${TREND_CRYPTO_VOLUME_MULTIPLIER:1.2}
     crypto-volume-lookback: ${TREND_CRYPTO_VOLUME_LOOKBACK:20}
 
+  correlation:
+    lookback-minutes: ${CORRELATION_LOOKBACK_MINUTES:15}
+    min-instruments-for-regime: ${CORRELATION_MIN_INSTRUMENTS:3}
+    price-change-threshold-pct: ${CORRELATION_PRICE_CHANGE_THRESHOLD:0.5}
+
+  volatility:
+    atr-period: ${VOLATILITY_ATR_PERIOD:14}
+    atr-lookback: ${VOLATILITY_ATR_LOOKBACK:20}
+    expansion-threshold: ${VOLATILITY_EXPANSION_THRESHOLD:1.5}
+    min-instruments: ${VOLATILITY_MIN_INSTRUMENTS:2}
+
+  correlation:
+    lookback-minutes: ${CORRELATION_LOOKBACK_MINUTES:15}
+    min-instruments-for-regime: ${CORRELATION_MIN_INSTRUMENTS:3}
+    price-change-threshold-pct: ${CORRELATION_PRICE_CHANGE_THRESHOLD:0.5}
+
+  volatility:
+    atr-period: ${VOLATILITY_ATR_PERIOD:14}
+    atr-lookback: ${VOLATILITY_ATR_LOOKBACK:20}
+    expansion-threshold: ${VOLATILITY_EXPANSION_THRESHOLD:1.5}
+    min-instruments: ${VOLATILITY_MIN_INSTRUMENTS:2}
+
   timeframes:
     - 1m
     - 5m
@@ -287,11 +309,14 @@ watchlist:
     - symbol: CC.D.LCO.USS.IP
       name: Oil (Brent)
       source: IG
-      enabled: false
+      enabled: true
       type: COMMODITY
       oversold-threshold: 30
       overbought-threshold: 70
       timeframes: "15m,1h,4h"
+      # Re-enabled Apr 2026 for cross-asset correlation detection.
+      # Oil spikes often precede index/crypto selloffs.
+      # RSI signals on oil alone may be noisy — primary use is as leading indicator.
     - symbol: IX.D.NASDAQ.CASH.IP
       name: Nasdaq 100
       source: IG

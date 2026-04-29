@@ -36,6 +36,10 @@ public class MarketDataPollingService {
     private final PriceHistoryService priceHistoryService;
     private final SignalDetectionService signalDetectionService;
     private final VolumeAnomalyDetector volumeAnomalyDetector;
+    private final CrossAssetCorrelationService crossAssetCorrelationService;
+    private final VolatilityRegimeService volatilityRegimeService;
+    private final CrossAssetCorrelationService crossAssetCorrelationService;
+    private final VolatilityRegimeService volatilityRegimeService;
     
     @Value("${rsi.market-hours.ig-start-utc:6}")
     private int igMarketStartUtc;
@@ -70,6 +74,10 @@ public class MarketDataPollingService {
                 .toList();
         
         log.debug("Polling {} Binance instruments", binanceInstruments.size());
+        
+        // Update regime detection on each poll cycle
+        crossAssetCorrelationService.update();
+        volatilityRegimeService.update();
         
         for (int i = 0; i < binanceInstruments.size(); i++) {
             Instrument instrument = binanceInstruments.get(i);
