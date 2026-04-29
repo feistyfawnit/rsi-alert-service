@@ -156,7 +156,7 @@ anomaly:
     std-dev-threshold: 3.0
     lookback-periods: 30
     min-periods-before-alert: 20
-    cooldown-minutes: 60
+    cooldown-minutes: 120
     min-baseline-volume: 200
     # Apr 24 2026: gate Telegram anomaly alerts. Database logging (anomaly_log) is
     # unaffected — only the Telegram push is filtered. Values:
