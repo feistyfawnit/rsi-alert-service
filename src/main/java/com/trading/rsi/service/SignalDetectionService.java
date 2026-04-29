@@ -36,8 +36,6 @@ public class SignalDetectionService {
     private final AnomalyNotificationService anomalyNotificationService;
     private final CrossAssetCorrelationService crossAssetCorrelationService;
     private final VolatilityRegimeService volatilityRegimeService;
-    private final CrossAssetCorrelationService crossAssetCorrelationService;
-    private final VolatilityRegimeService volatilityRegimeService;
     
     @Value("${rsi.period:14}")
     private int rsiPeriod;

@@ -38,8 +38,6 @@ public class MarketDataPollingService {
     private final VolumeAnomalyDetector volumeAnomalyDetector;
     private final CrossAssetCorrelationService crossAssetCorrelationService;
     private final VolatilityRegimeService volatilityRegimeService;
-    private final CrossAssetCorrelationService crossAssetCorrelationService;
-    private final VolatilityRegimeService volatilityRegimeService;
     
     @Value("${rsi.market-hours.ig-start-utc:6}")
     private int igMarketStartUtc;

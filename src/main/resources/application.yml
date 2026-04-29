@@ -109,17 +109,6 @@ rsi:
     expansion-threshold: ${VOLATILITY_EXPANSION_THRESHOLD:1.5}
     min-instruments: ${VOLATILITY_MIN_INSTRUMENTS:2}
 
-  correlation:
-    lookback-minutes: ${CORRELATION_LOOKBACK_MINUTES:15}
-    min-instruments-for-regime: ${CORRELATION_MIN_INSTRUMENTS:3}
-    price-change-threshold-pct: ${CORRELATION_PRICE_CHANGE_THRESHOLD:0.5}
-
-  volatility:
-    atr-period: ${VOLATILITY_ATR_PERIOD:14}
-    atr-lookback: ${VOLATILITY_ATR_LOOKBACK:20}
-    expansion-threshold: ${VOLATILITY_EXPANSION_THRESHOLD:1.5}
-    min-instruments: ${VOLATILITY_MIN_INSTRUMENTS:2}
-
   timeframes:
     - 1m
     - 5m
