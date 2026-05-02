@@ -104,7 +104,7 @@ The app comes pre-configured with:
 - **Ethereum (ETHUSDT)** - Binance
 - **Bitcoin Cash (BCHUSDT)** - Binance
 - **DAX 40, FTSE 100, S&P 500, Nasdaq 100** - IG API
-- **Gold, Silver, Oil (Brent)** - IG API
+- **Gold, Oil (Brent)** - IG API (Silver, Nasdaq disabled)
 
 All crypto data is FREE via Binance API (no API key required). Indices/commodities require an IG account.
 
@@ -135,7 +135,7 @@ See [docs/api.md](docs/api.md) for adding instruments via the REST API.
 | 1 | 🟢 OVERSOLD / 🔴 OVERBOUGHT | All TFs aligned | Alert |
 | 2 | 📈 TREND_BUY_DIP / 📉 TREND_SELL_RALLY | RSI pullback in confirmed trend | Alert |
 | 3 | 🟡 PARTIAL | All but 1 TF aligned | Alert |
-| 4 | 👀 WATCH | 1 TF crossed + others approaching | Silent |
+| 4 | 👀 WATCH | 1 TF crossed + others approaching | Disabled by default |
 
 > TREND_SELL_RALLY is currently **disabled** (`trend.sell-rally-enabled: false`) due to −0.79R expectancy in backtest.
 
@@ -172,6 +172,8 @@ docker-compose logs -f app                             # Check logs
 | [docs/project-log.md](docs/project-log.md) | Incident history and decisions over time |
 | [docs/risk-register.md](docs/risk-register.md) | Risks, constraints, and operational warnings |
 | [docs/archived/requirements.md](docs/archived/requirements.md) | Original historical specification (not the current source of truth) |
+| [docs/archived/backtest-report.md](docs/archived/backtest-report.md) | Apr 2026 signal quality backtest (archived — findings actioned) |
+REPLACE
 
 ⚠️ **Personal use only — not financial advice — MiFID II: no public distribution**
 

@@ -27,7 +27,7 @@ curl -s -X GET "https://api.ig.com/gateway/deal/prices/IX.D.DAX.DAILY.IP/HOUR/1"
 | Non-trading requests/min | 60 | Rolling |
 | Per-account requests/min | 30 | Rolling |
 
-**Current config budget**: ~5,300 data points/week (7 IG instruments, 15 min polling + candle-period skip)
+**Current config budget**: ~5,300 data points/week (5 IG instruments, 15 min polling + candle-period skip)
 
 ## Common Error Codes
 
@@ -159,7 +159,7 @@ Prevents OOM kills during GC spikes or build bursts:
 
 ```bash
 ssh -i ~/.ssh/market-signals.pem ubuntu@108.128.230.238
-sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```

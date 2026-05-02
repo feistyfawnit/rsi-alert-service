@@ -238,7 +238,7 @@ Based on historical signals (28 March – April 2026) and instrument characteris
 | **IG API** | 60 req/min | 6 instruments × 3 TFs = 18 req/min (at 300s interval = ~3.6 req/min avg) | ~56 remaining |
 | **Binance** | 1,200 weight/min | 4 instruments × 3 TFs = 12 req/min | ~1,188 remaining |
 
-Active IG instruments: DAX, FTSE, S&P, Nasdaq (indices), Oil/Brent, Silver (commodities). Gold disabled.
+Active IG instruments: DAX, FTSE, SActive IG instruments: DAX, FTSE, S&P, Nasdaq (indices), Oil/Brent, Silver (commodities). Gold disabled.P 500, Gold, Oil/Brent (indices/commodities). Nasdaq, Silver disabled. Stale DB records `CS.D.USCGC.TODAY.IP` + `CC.D.LCO.FSD.IP` disabled on 8 Apr.
 Stale DB records `CS.D.USCGC.TODAY.IP` + `CC.D.LCO.FSD.IP` disabled on 8 Apr.
 
 ---
@@ -285,7 +285,7 @@ Brian uses Stochastic (14,3,3) as his *primary* trigger on IG — RSI is the fil
 
 **Implementation note**: IG API provides OHLC candles already fetched for RSI — Stochastic is computable from the same data. No additional API calls needed. Add to `RSICalculatorService` or a new `StochasticCalculatorService`.
 
-*See Section 6.1 of `rsi-alert-tool-requirements.md` for Brian's observed Stochastic usage.*
+*See Section 6.1 of `docs/archived/requirements.md` for Brian's observed Stochastic usage.*
 
 ---
 

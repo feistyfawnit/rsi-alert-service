@@ -113,8 +113,9 @@ Instruments are seeded from `application.yml` on startup via `DataInitializer` a
 
 | Store | Location | Retention | Purpose |
 |---|---|---|---|
-| `signal_archive/*.csv` | Flat files on disk | **Forever** (monthly partitioned) | Every signal with RSI values, candle OHLCV, and outcome prices at 1h/4h/24h |
-| `signal_logs` DB table | PostgreSQL | **Forever** (archived to CSV after 90 days) | Signal history queryable via REST API |
+| `signal_archive/*.csv` | Flat files on disk | **90 days → CSV** (monthly partitioned) | Every signal with RSI values, candle OHLCV, and outcome prices at 1h/4h/24h |
+| `signal_logs` DB table | PostgreSQL | **90 days → CSV** | Signal history queryable via REST API |
+REPLACE
 | `daily_prices_YYYY.csv` | Flat files on disk | **Forever** (yearly partitioned, ~40KB/year) | Daily OHLCV per instrument — permanent long-term price archive |
 | `daily_price_summary` DB table | PostgreSQL | **Rolling 90 days** (configurable) | Staging area for daily rollup; purged after CSV export |
 | `candle_history` DB table | PostgreSQL | **Rolling 100 candles** per symbol:timeframe | RSI/Stochastic calculation working set; survives restarts |
@@ -147,7 +148,7 @@ The `signal_archive` signal CSVs are the analytics backbone — they capture not
 | AI | Claude API (Anthropic) — optional |
 | Build | Maven |
 | Container | Docker + docker-compose |
-| Hosting | Railway.app (~€5/month) or local Docker |
+| Hosting | AWS EC2 t3.micro (eu-west-1) or local Docker |
 
 ---
 

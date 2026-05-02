@@ -217,7 +217,7 @@ It does not trigger additional API calls — the candle data is already in memor
 | Source | Poll interval | Instruments | Calls/poll | Calls/day |
 |--------|--------------|-------------|-----------|-----------|
 | Binance | 300s (5 min) | 4 crypto × 3 TFs | 12 | ~3,456 |
-| IG | 900s (15 min) | 7 instruments × 3 TFs | ≤21 (candle-period skip saves ~60%) | ~500–800 data points |
+| IG | 900s (15 min) | 5 instruments × 3 TFs | ≤15 (candle-period skip saves ~60%) | ~400–600 data points |
 
 Binance limit: 1,200 requests/min. Current usage: ~2.4/min. IG limit: 10,000 data points/week.
 

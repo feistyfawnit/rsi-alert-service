@@ -32,7 +32,7 @@ Monitored financial instruments (crypto, indices, commodities).
 
 ---
 
-### `signal_log`
+### `signal_logs`
 
 Historical record of all RSI signals detected.
 
@@ -159,9 +159,9 @@ Currently using Hibernate `ddl-auto: update`. This is acceptable for a personal 
 To see the live schema at any time:
 
 ```bash
-docker exec rsi-postgres psql -U postgres -d rsi_alerts -c "\dt"
-docker exec rsi-postgres psql -U postgres -d rsi_alerts -c "\d app_settings"
-docker exec rsi-postgres psql -U postgres -d rsi_alerts -c "SELECT * FROM app_settings;"
+docker exec market-signals-postgres psql -U postgres -d market_signals -c "\dt"
+docker exec market-signals-postgres psql -U postgres -d market_signals -c "\d app_settings"
+docker exec market-signals-postgres psql -U postgres -d market_signals -c "SELECT * FROM app_settings;"
 ```
 
 ---
