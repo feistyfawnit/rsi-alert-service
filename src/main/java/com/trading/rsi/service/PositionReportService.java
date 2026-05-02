@@ -76,8 +76,10 @@ public class PositionReportService {
         Map.entry("IX.D.SPTRD.DAILY.IP", "S&P"),
         Map.entry("IX.D.NASDAQ.CASH.IP", "NAS"),
         Map.entry("CS.D.GOLD.CFD.IP", "GOLD"),
+        Map.entry("CS.D.USCGC.TODAY.IP", "GOLD"),
         Map.entry("CS.D.SILVER.CFD.IP", "SILV"),
-        Map.entry("CS.D.OIL.CFD.IP", "OIL")
+        Map.entry("CS.D.OIL.CFD.IP", "OIL"),
+        Map.entry("CC.D.LCO.USS.IP", "OIL")
     );
 
     /**
@@ -308,7 +310,11 @@ public class PositionReportService {
             md.append("\n</details>\n");
         }
 
-        md.append("\n---\n*Run `make pnl-report` to refresh. Auto-updates daily at 06:00 UTC.*\n");
+        md.append("\n---\n*Run `make pnl-report` to refresh. Auto-updates daily at 06:00 UTC.*\n\n");
+        md.append("*Oil rebound review:* `GET /api/positions/oil-review`\n\n");
+        md.append("> **Note:** Positions closed prior to 2026-04-21 are not shown in this report. ");
+        md.append("Earlier closed trades (mostly TREND_BUY_DIP wins on SOL) contributed approximately **+€800** (R-weighted). ");
+        md.append("These are archived in `position_outcomes_YYYY-MM.csv`.\n");
         return md.toString();
     }
 
@@ -368,12 +374,16 @@ public class PositionReportService {
         double estEurVal = estEur(p, riskEur);
 
         String shortName = SHORT_NAMES.getOrDefault(p.getSymbol(), p.getSymbol());
-        String sigType = p.getSignalType().toString();
+        String rawSigType = p.getSignalType().toString();
+        String sigType = rawSigType;
 
-        // Strikethrough if TREND_BUY_DIP is disabled for this instrument
+        // Strikethrough if TREND_BUY_DIP is disabled; 🔇 if notify is off (silent recording)
         Instrument inst = instruments.get(p.getSymbol());
-        if ("TREND_BUY_DIP".equals(sigType) && inst != null && Boolean.FALSE.equals(inst.getTrendBuyDipEnabled())) {
+        if ("TREND_BUY_DIP".equals(rawSigType) && inst != null && Boolean.FALSE.equals(inst.getTrendBuyDipEnabled())) {
             sigType = "~~" + sigType + "~~";
+        }
+        if ("TREND_BUY_DIP".equals(rawSigType) && inst != null && Boolean.FALSE.equals(inst.getTrendBuyDipNotify())) {
+            sigType = "🔇 " + sigType;
         }
 
         return "| " + rowNum
@@ -392,12 +402,16 @@ public class PositionReportService {
      */
     private String formatOpenRowCompact(PositionOutcome p, double riskEur, Instant nowI, Map<String, Instrument> instruments, int rowNum) {
         String shortName = SHORT_NAMES.getOrDefault(p.getSymbol(), p.getSymbol());
-        String sigType = p.getSignalType().toString();
+        String rawSigType = p.getSignalType().toString();
+        String sigType = rawSigType;
 
-        // Strikethrough if TREND_BUY_DIP is disabled for this instrument
+        // Strikethrough if TREND_BUY_DIP is disabled; 🔇 if notify is off (silent recording)
         Instrument inst = instruments.get(p.getSymbol());
-        if ("TREND_BUY_DIP".equals(sigType) && inst != null && Boolean.FALSE.equals(inst.getTrendBuyDipEnabled())) {
+        if ("TREND_BUY_DIP".equals(rawSigType) && inst != null && Boolean.FALSE.equals(inst.getTrendBuyDipEnabled())) {
             sigType = "~~" + sigType + "~~";
+        }
+        if ("TREND_BUY_DIP".equals(rawSigType) && inst != null && Boolean.FALSE.equals(inst.getTrendBuyDipNotify())) {
+            sigType = "🔇 " + sigType;
         }
 
         BigDecimal cur = priceHistoryService.getLatestPrice(p.getSymbol());

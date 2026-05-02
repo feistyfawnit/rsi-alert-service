@@ -208,6 +208,27 @@ archive:
   dir: ${ARCHIVE_DIR:./signal_archive}
   retention-days: ${ARCHIVE_RETENTION_DAYS:90}
 
+pnl:
+  oil-review:
+    path: ${OIL_REVIEW_PATH:./reports/oil-opportunity-review.md}
+    lookback-days: ${OIL_REVIEW_LOOKBACK_DAYS:7}
+    rsi-threshold: ${OIL_REVIEW_RSI_THRESHOLD:40}
+    min-4h-rebound-pct: ${OIL_REVIEW_MIN_REBOUND_PCT:1.0}
+    min-separation-minutes: ${OIL_REVIEW_MIN_SEPARATION_MINUTES:120}
+
+momentum:
+  surge:
+    # Price-momentum surge detector: identifies rapid intraday moves (>0.5%/15min or >1%/1h)
+    # before RSI aligns, requiring 2+ indices/commodities aligned to filter noise.
+    # Uses existing candle_history only — no extra IG API calls.
+    lookback-days: ${MOMENTUM_LOOKBACK_DAYS:14}
+    report-path: ${MOMENTUM_REPORT_PATH:./reports/momentum-surge-review.md}
+    min-separation-minutes: ${MOMENTUM_MIN_SEPARATION_MINUTES:60}
+    # Surge thresholds (internal, not exposed to env):
+    #   15m: >0.5% move
+    #   1h:  >1.0% move
+    # Aligned window: 2+ instruments within 30 minutes
+
 springdoc:
   api-docs:
     path: /api-docs

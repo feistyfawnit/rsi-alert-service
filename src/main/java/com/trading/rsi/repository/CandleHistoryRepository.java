@@ -2,6 +2,7 @@ package com.trading.rsi.repository;
 
 import com.trading.rsi.domain.CandleHistory;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +17,12 @@ import java.util.List;
 public interface CandleHistoryRepository extends JpaRepository<CandleHistory, Long> {
 
     List<CandleHistory> findBySymbolAndTimeframeOrderByCandleTimeAsc(String symbol, String timeframe);
+
+    List<CandleHistory> findBySymbolAndTimeframeOrderByCandleTimeDesc(String symbol, String timeframe, Pageable pageable);
+
+    List<CandleHistory> findByCandleTimeBefore(Instant before);
+
+    List<CandleHistory> findByCandleTimeBeforeOrderByCandleTimeAsc(Instant before, Pageable pageable);
 
     List<CandleHistory> findBySymbolAndTimeframeAndCandleTimeBetweenOrderByCandleTimeAsc(
             String symbol, String timeframe, Instant from, Instant to);

@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -442,13 +443,13 @@ public class TrendDetectionService {
             return true;
         }
 
-        List<CandleHistory> candles = candleHistoryRepository
-                .findBySymbolAndTimeframeOrderByCandleTimeAsc(instrument.getSymbol(), "15m");
-        if (candles == null || candles.size() < cryptoVolumeLookback) {
+        List<CandleHistory> lookback = candleHistoryRepository
+                .findBySymbolAndTimeframeOrderByCandleTimeDesc(
+                        instrument.getSymbol(), "15m", Pageable.ofSize(cryptoVolumeLookback));
+        if (lookback == null || lookback.size() < cryptoVolumeLookback) {
             return true; // warmup — better to alert than miss
         }
 
-        List<CandleHistory> lookback = candles.subList(candles.size() - cryptoVolumeLookback, candles.size());
         double meanVolume = lookback.stream()
                 .mapToDouble(c -> c.getVolume() != null ? c.getVolume().doubleValue() : 0.0)
                 .average()

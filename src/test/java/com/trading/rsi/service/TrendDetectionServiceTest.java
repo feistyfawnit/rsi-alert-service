@@ -14,6 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -218,7 +219,8 @@ class TrendDetectionServiceTest {
 
         // 20 candles with mean volume 1000; trigger volume 1300 = 1.3× → passes 1.2× threshold
         List<CandleHistory> history = buildVolumeHistory(20, 1000.0);
-        when(candleHistoryRepository.findBySymbolAndTimeframeOrderByCandleTimeAsc("SOLUSDT", "15m"))
+        when(candleHistoryRepository.findBySymbolAndTimeframeOrderByCandleTimeDesc(
+                eq("SOLUSDT"), eq("15m"), any(Pageable.class)))
                 .thenReturn(history);
 
         Map<String, BigDecimal> dipRsi = Map.of(
@@ -245,7 +247,8 @@ class TrendDetectionServiceTest {
 
         // 20 candles with mean volume 1000; trigger volume 1000 = 1.0× → fails 1.2× threshold
         List<CandleHistory> history = buildVolumeHistory(20, 1000.0);
-        when(candleHistoryRepository.findBySymbolAndTimeframeOrderByCandleTimeAsc("SOLUSDT", "15m"))
+        when(candleHistoryRepository.findBySymbolAndTimeframeOrderByCandleTimeDesc(
+                eq("SOLUSDT"), eq("15m"), any(Pageable.class)))
                 .thenReturn(history);
 
         Map<String, BigDecimal> dipRsi = Map.of(

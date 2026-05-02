@@ -40,7 +40,7 @@ public class CrossAssetCorrelationService {
     private double priceChangeThresholdPct;
 
     // Cache of recent price snapshots per symbol
-    private final Map<String, PriceSnapshot> recentPrices = new ConcurrentHashMap<>();
+    private final Map<String, Deque<PriceSnapshot>> recentPrices = new ConcurrentHashMap<>();
 
     // Current regime state
     private volatile Regime currentRegime = Regime.NEUTRAL;
@@ -66,31 +66,32 @@ public class CrossAssetCorrelationService {
         Instant now = Instant.now();
         Instant cutoff = now.minus(Duration.ofMinutes(lookbackMinutes));
 
-        // Update price snapshots
-        for (Instrument instrument : instruments) {
-            BigDecimal price = priceHistoryService.getLatestPrice(instrument.getSymbol());
-            if (price != null) {
-                recentPrices.put(instrument.getSymbol(), new PriceSnapshot(price, now));
-            }
-        }
-
-        // Remove stale snapshots
-        recentPrices.entrySet().removeIf(e -> e.getValue().timestamp().isBefore(cutoff));
-
         // Classify each instrument's direction
         List<String> rising = new ArrayList<>();
         List<String> falling = new ArrayList<>();
 
         for (Instrument instrument : instruments) {
-            PriceSnapshot snapshot = recentPrices.get(instrument.getSymbol());
-            if (snapshot == null) continue;
-
-            // Compare current price to snapshot
             BigDecimal currentPrice = priceHistoryService.getLatestPrice(instrument.getSymbol());
             if (currentPrice == null) continue;
 
-            double changePct = currentPrice.subtract(snapshot.price())
-                    .divide(snapshot.price(), 8, RoundingMode.HALF_UP)
+            Deque<PriceSnapshot> snapshots = recentPrices.computeIfAbsent(
+                    instrument.getSymbol(), key -> new ArrayDeque<>());
+
+            PriceSnapshot baseline;
+            synchronized (snapshots) {
+                while (!snapshots.isEmpty() && snapshots.peekFirst().timestamp().isBefore(cutoff)) {
+                    snapshots.removeFirst();
+                }
+                snapshots.addLast(new PriceSnapshot(currentPrice, now));
+                baseline = snapshots.peekFirst();
+            }
+
+            if (baseline == null || baseline.price().compareTo(BigDecimal.ZERO) == 0) {
+                continue;
+            }
+
+            double changePct = currentPrice.subtract(baseline.price())
+                    .divide(baseline.price(), 8, RoundingMode.HALF_UP)
                     .multiply(BigDecimal.valueOf(100))
                     .doubleValue();
 
@@ -100,6 +101,15 @@ public class CrossAssetCorrelationService {
                 falling.add(instrument.getSymbol());
             }
         }
+
+        // Prune deques for disabled instruments (prevent memory leak from stale cache entries)
+        Set<String> enabledSymbols = instruments.stream()
+                .map(Instrument::getSymbol)
+                .collect(java.util.stream.Collectors.toSet());
+        recentPrices.entrySet().removeIf(entry -> !enabledSymbols.contains(entry.getKey()));
+
+        // Also remove empty deques
+        recentPrices.entrySet().removeIf(entry -> entry.getValue().isEmpty());
 
         // Determine regime based on which asset classes are moving
         Regime newRegime = determineRegime(rising, falling, instruments);
@@ -143,6 +153,7 @@ public class CrossAssetCorrelationService {
         boolean commoditiesRising = commodityRising.size() >= 1;
         boolean indicesFalling = indexFalling.size() >= 1;
         boolean cryptoFallingFlag = cryptoFalling.size() >= 1;
+        // Count asset classes (each category contributes 0 or 1), not individual instruments
         int totalMoving = (commoditiesRising ? 1 : 0) + (indicesFalling ? 1 : 0) + (cryptoFallingFlag ? 1 : 0);
 
         if (totalMoving >= minInstrumentsForRegime && commoditiesRising && (indicesFalling || cryptoFallingFlag)) {
@@ -154,7 +165,7 @@ public class CrossAssetCorrelationService {
         boolean cryptoRisingFlag = cryptoRising.size() >= 1;
         int totalRising = (indicesRising ? 1 : 0) + (cryptoRisingFlag ? 1 : 0);
 
-        if (totalRising >= 2) {
+        if (totalRising >= 2 && indicesRising && cryptoRisingFlag) {
             return Regime.RISK_ON;
         }
 

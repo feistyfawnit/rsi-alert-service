@@ -50,8 +50,8 @@ The app runs on an **AWS t3.micro (1 GB RAM, 1 vCPU)**. Efficiency is a first-cl
 
 - **JVM is tightly capped**: `-Xmx320m -XX:MaxMetaspaceSize=64m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC`. Do not raise these without profiling first.
 - **Docker hard limits**: app container `memory: 450M`, Postgres `memory: 100M`. OOM kills are real.
-- **DB queries must be bounded**: `findBySymbolAndTimeframeOrderByCandleTimeAsc(...)` fetches **all** rows. Always paginate or limit (`Pageable` / `TOP N`) when querying time-series tables (`candle_history`, `signal_logs`, `position_outcomes`). Unbounded queries will eventually exhaust heap on EC2.
-- **Tables that grow forever need archival**: `candle_history`, `position_outcomes`, `signal_logs` (90-day archival already exists). Extend the same pattern to `position_outcomes` and `candle_history`.
+- **DB queries must be bounded**: `TrendDetectionService.isVolumeConfirmed()` now uses `findBySymbolAndTimeframeOrderByCandleTimeDesc(..., Pageable.ofSize(lookback))` — only the last N candles are fetched. ✅ Fixed Apr 2026.
+- **Tables that grow forever need archival**: `signal_logs` (90-day), `position_outcomes` (90-day), and `candle_history` (60-day) are all archived weekly/monthly by `HistoryArchivalService` to dated CSVs in `signal_archive/`, then pruned from DB. ✅ Fixed Apr 2026.
 - **Phase 5 anomaly services** (`VolumeAnomalyDetector`, `PolymarketMonitorService`) are live but lightweight. Do not add more scheduled polling loops without checking CPU impact on the single vCPU.
 - **Telegram message batching**: `PartialSignalMonitorService` already tightened (60 min window, 30 min interval). Do not increase notification frequency.
 - **No local + AWS simultaneous runs**: doubles IG data point consumption and JVM/DB contention. `make up` is guarded with `LOCAL_RUN=yes` check.

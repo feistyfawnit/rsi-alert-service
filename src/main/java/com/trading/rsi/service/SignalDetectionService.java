@@ -215,36 +215,6 @@ public class SignalDetectionService {
                 return;
             }
 
-            // Suppress buy signals during risk-off regime (oil spikes + indices/crypto falling)
-            boolean isBuySignal = signalType == SignalLog.SignalType.OVERSOLD
-                    || signalType == SignalLog.SignalType.PARTIAL_OVERSOLD
-                    || signalType == SignalLog.SignalType.WATCH_OVERSOLD
-                    || signalType == SignalLog.SignalType.TREND_BUY_DIP;
-            if (isBuySignal && crossAssetCorrelationService.isRiskOff()) {
-                log.info("RISK-OFF SUPPRESSED: {} {} — risk-off regime active (oil spiking, indices/crypto falling)",
-                        signalType, instrument.getSymbol());
-                return;
-            }
-
-            // Suppress sell signals during risk-on regime (indices + crypto rising)
-            boolean isSellSignal = signalType == SignalLog.SignalType.OVERBOUGHT
-                    || signalType == SignalLog.SignalType.PARTIAL_OVERBOUGHT
-                    || signalType == SignalLog.SignalType.WATCH_OVERBOUGHT
-                    || signalType == SignalLog.SignalType.TREND_SELL_RALLY;
-            if (isSellSignal && crossAssetCorrelationService.isRiskOn()) {
-                log.info("RISK-ON SUPPRESSED: {} {} — risk-on regime active (indices/crypto rising)",
-                        signalType, instrument.getSymbol());
-                return;
-            }
-
-            // Suppress all signals during high volatility (ATR expansion across multiple instruments)
-            if (volatilityRegimeService.isHighVolatility()) {
-                log.info("HIGH VOLATILITY SUPPRESSED: {} {} — ATR expansion across {} instruments",
-                        signalType, instrument.getSymbol(),
-                        volatilityRegimeService.getExpansionRatios().size());
-                return;
-            }
-
             boolean isFullSignal = alignedCount >= totalTimeframes;
 
             // Suppress partial/watch signals for crypto (volatile, need full alignment for reliable signals)
