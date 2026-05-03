@@ -55,6 +55,20 @@ jobs:
           wc -l ./reports/candles/candles-ec2-*.csv
           echo "✅ Candle backup saved"
 
+      - name: Pull live signal_logs CSV from EC2
+        run: |
+          echo "📥 Exporting full signal_logs from EC2 Postgres..."
+          ssh -o StrictHostKeyChecking=accept-new ubuntu@${{ secrets.EC2_HOST }} "docker exec market-signals-postgres psql -U postgres -d market_signals -c \"\\copy (SELECT id, symbol, instrument_name, signal_type, current_price, rsi_1m, rsi_5m, rsi_15m, rsi_30m, rsi_1h, rsi_4h, timeframes_aligned, signal_strength, created_at FROM signal_logs ORDER BY created_at) TO STDOUT WITH CSV HEADER\"" > ./signal_archive/signal_logs_live_$(date -u +%Y%m%d).csv
+          wc -l ./signal_archive/signal_logs_live_*.csv
+          echo "✅ signal_logs backup saved"
+
+      - name: Pull live position_outcomes CSV from EC2
+        run: |
+          echo "📥 Exporting full position_outcomes from EC2 Postgres..."
+          ssh -o StrictHostKeyChecking=accept-new ubuntu@${{ secrets.EC2_HOST }} "docker exec market-signals-postgres psql -U postgres -d market_signals -c \"\\copy (SELECT id, symbol, signal_type, is_long, entry_time, entry_price, sl_price, tp_price, exit_time, exit_price, tp_hit, sl_hit, pnl_pct, holding_hours, trend_state, rsi_fast, rsi_mid, rsi_slow, stoch_k, stoch_d FROM position_outcomes ORDER BY entry_time) TO STDOUT WITH CSV HEADER\"" > ./signal_archive/position_outcomes_live_$(date -u +%Y%m%d).csv
+          wc -l ./signal_archive/position_outcomes_live_*.csv
+          echo "✅ position_outcomes backup saved"
+
       - name: Commit and push if changes exist
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
